@@ -53,14 +53,16 @@ gastosBot/
     ├── documentacion.md      # Bitácora general por instancias
     ├── docs/
     │   ├── decisiones-arquitectura.md
-    │   └── comandos.md
+    │   ├── comandos.md
+    │   └── despliegue.md
     ├── database/             # schema.sql, seed.sql y capa de acceso
-    ├── modules/              # lógica de negocio (a partir de Instancia 2)
-    ├── handlers/             # handlers de Telegram (a partir de Instancia 4)
-    ├── utils/                # parsers y utilidades
+    ├── modules/              # lógica de negocio, Gemini y persistencia
+    ├── handlers/             # handlers de Telegram y flujos interactivos
+    ├── utils/                # parsers, formato y teclados
+    ├── scripts/              # instalación, arranque, parada y respaldo
     ├── tests/                # pruebas automatizadas
     ├── config.py             # configuración y variables de entorno
-    ├── main.py               # punto de entrada (a partir de Instancia 4)
+    ├── main.py               # punto de entrada
     └── requirements*.txt
 ```
 
@@ -174,30 +176,35 @@ cp .env.example .env        # completar tokens reales
 python -m pytest -q
 ```
 
-Para ejecutar el bot (a partir de la Instancia 4):
+Para ejecutar el bot:
 
 ```bash
-python main.py
+./scripts/start.sh          # background con PID y logs
+./scripts/status.sh
+./scripts/stop.sh
 ```
+
+También se puede ejecutar en primer plano con `python main.py`.
 
 ## Despliegue en Termux (Moto G7)
 
 ```bash
 pkg install python git
-cd ~/gastos
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env        # completar tokens reales
-nohup python main.py >> logs/bot.log 2>&1 &
-echo $! > bot.pid
+git clone git@github.com:alexistpe/GestionGastos.git ~/gastos
+cd ~/gastos/Desarrollo
+bash scripts/install_termux.sh
+nano .env                   # tokens, chat ID, Gemini y DB_PATH
+./scripts/start.sh
+./scripts/status.sh
 ```
 
-El respaldo diario se configura con cron:
+El respaldo diario se configura con cron y el script incluido:
 
 ```cron
-0 3 * * * cd ~/gastos && git add -A && git commit -m "backup: $(date +%Y-%m-%d)" && git push origin main
+0 3 * * * /data/data/com.termux/files/home/gastos/Desarrollo/scripts/backup.sh >> /data/data/com.termux/files/home/gastos/Desarrollo/logs/backup.log 2>&1
 ```
+
+La guía completa de instalación, operación, respaldo, restauración y diagnóstico está en [`Desarrollo/docs/despliegue.md`](Desarrollo/docs/despliegue.md).
 
 ## Estado del proyecto
 
@@ -209,12 +216,15 @@ El desarrollo se organiza en **instancias** con puntos de control. La bitácora 
 | 1 | Núcleo de datos: schema, acceso y parsers | Aprobada |
 | 2 | Motor de negocio: resumen, avisos y gestión | Aprobada |
 | 3 | Extracción con Gemini | Aprobada (validación real con 2 comprobantes) |
-| 4 | Interfaz Telegram completa | Pendiente de OK (125 pruebas, arranque validado) |
-| 5 | Despliegue y operación | Pendiente |
+| 4 | Interfaz Telegram completa | Aprobada (125 pruebas, arranque validado) |
+| 5 | Despliegue y operación | Pendiente de OK (scripts y guía de despliegue) |
+
+El núcleo ya está listo para probar desde Telegram con `./scripts/start.sh`. La Instancia 5 agrega la operación en Termux, los respaldos y la guía de despliegue.
 
 ## Documentación
 
 - [`Desarrollo/documentacion.md`](Desarrollo/documentacion.md): bitácora por instancias, decisiones y conflictos.
 - [`Desarrollo/docs/decisiones-arquitectura.md`](Desarrollo/docs/decisiones-arquitectura.md): detalle técnico de las decisiones.
 - [`Desarrollo/docs/comandos.md`](Desarrollo/docs/comandos.md): guía de uso del bot.
+- [`Desarrollo/docs/despliegue.md`](Desarrollo/docs/despliegue.md): instalación, operación y respaldo en Termux.
 - [`Diseño/`](Diseño/): documentos de diseño, MODP, CDU, DTE y SPEC original.

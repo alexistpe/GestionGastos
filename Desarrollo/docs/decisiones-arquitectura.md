@@ -301,14 +301,16 @@ Reglas:
 
 ## 12. Despliegue
 
-- Código en `~/gastos` dentro de Termux.
-- Base en `data/gastos.db`, logs en `logs/bot.log`.
-- Ejecución con `nohup` y archivo `bot.pid`.
-- Respaldo diario con cron a las 03:00.
+- Código en `~/gastos/Desarrollo` dentro de Termux.
+- Base en `data/gastos.db`, logs de la app en `logs/bot.log` y salida cruda en `logs/nohup.log`.
+- Ejecución con `scripts/start.sh`, PID en `bot.pid`, parada con `scripts/stop.sh` y estado con `scripts/status.sh`.
+- Instalación con `scripts/install_termux.sh`.
+- Respaldo diario con cron a las 03:00 mediante `scripts/backup.sh`.
+- El respaldo crea una copia consistente de SQLite en `data/backups/` y sube solo código y documentación a GitHub.
 - Dependencia `python-telegram-bot[job-queue]` para los timeouts de conversación.
 - En Python 3.14 se crea y setea un event loop antes de `run_polling`; en Termux (3.11/3.12) el mismo código funciona.
-- La copia local de desarrollo usa `DB_PATH=./data/gastos.db`; el `.env` de Termux mantiene la ruta absoluta del dispositivo.
-- El diagrama de despliegue final se entrega en `docs/despliegue.md` durante la Instancia 5.
+- La copia local de desarrollo usa `DB_PATH=./data/gastos.db`; el `.env` de Termux puede usar la ruta absoluta del dispositivo.
+- El diagrama de despliegue y la guía operativa están en `docs/despliegue.md`.
 
 ---
 

@@ -5,7 +5,7 @@
 - **Rama:** `main`
 - **Código:** `Desarrollo/`
 - **Inicio:** 2026-11-20
-- **Estado general:** Instancia 4 completada; pendiente de aprobación (C4)
+- **Estado general:** Instancia 5 completada; pendiente de aprobación (C5)
 
 Este documento es la bitácora general del proyecto. Registra cada cambio, decisión, conflicto y proceso relevante. Se organiza por **instancias** y cada instancia cierra con un **checkpoint** que requiere aprobación explícita antes de continuar.
 
@@ -31,8 +31,8 @@ Este documento es la bitácora general del proyecto. Registra cada cambio, decis
 | 1 | Núcleo de datos: schema, acceso y parsers | C1 | APROBADA |
 | 2 | Motor de negocio: resumen, avisos y gestión | C2 | APROBADA |
 | 3 | Extracción con Gemini | C3 | APROBADA |
-| 4 | Interfaz Telegram completa | C4 | PENDIENTE DE OK |
-| 5 | Despliegue y operación | C5 | PENDIENTE |
+| 4 | Interfaz Telegram completa | C4 | APROBADA |
+| 5 | Despliegue y operación | C5 | PENDIENTE DE OK |
 
 ---
 
@@ -89,6 +89,11 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | DEC-028 | Logging con redacción de secretos y `httpx`/`httpcore` en `WARNING` | Evita que la URL de Telegram con el token quede en los logs |
 | DEC-029 | Crear y setear un event loop antes de `run_polling` | Python 3.14 ya no crea un loop implícito; el workaround también funciona en 3.11 |
 | DEC-030 | Instalar `python-telegram-bot[job-queue]` | Habilita `conversation_timeout` para expirar conversaciones en memoria |
+| DEC-031 | `scripts/start.sh` redirige stdout/stderr a `logs/nohup.log`; la app sigue usando `logs/bot.log` con rotación | Evita doble escritura y conflictos con el `RotatingFileHandler` |
+| DEC-032 | `scripts/backup.sh` usa la raíz real de Git, evita commits vacíos y crea una copia local consistente de SQLite | Respaldo confiable del código y de la base sin versionar datos sensibles |
+| DEC-033 | `scripts/install_termux.sh` automatiza Termux; la guía completa vive en `docs/despliegue.md` | Reduce errores de instalación y deja operación reproducible |
+| DEC-034 | La exposición local del token en un equipo personal se considera aceptable siempre que no se versione | Decisión del usuario; se mantienen redacción de logs y `.gitignore` |
+| DEC-035 | El respaldo sube solo código y documentación; la base se copia localmente en `data/backups/` | Proteger datos financieros y mantener una copia recuperable |
 
 ---
 
@@ -105,9 +110,12 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | CONF-007 | 2026-11-20 | `gemini-3.8-flash` y `gemini-3.7-flash` devolvieron 503 por alta demanda durante la validación | Medio | Se adoptó `gemini-3.1-flash-lite` como default por disponibilidad; los dos comprobantes reales se procesaron correctamente | Resuelto |
 | CONF-008 | 2026-11-20 | PTB 21.11 con Python 3.14 falló en `run_polling` por falta de event loop implícito | Medio | Se crea y setea un event loop antes de `run_polling` (DEC-029) | Resuelto |
 | CONF-009 | 2026-11-20 | PTB emitió una advertencia por `per_message=False` con `CallbackQueryHandler` | Bajo | Se silencia la advertencia conocida en `main.py` y `pytest.ini` | Resuelto |
-| CONF-010 | 2026-11-20 | `httpx` registró en `logs/bot.log` la URL de Telegram con el token durante el arranque | Alto | Se eliminó el log, se agregó redacción de secretos y se bajó `httpx`/`httpcore` a `WARNING`. **Requiere rotar el token con @BotFather** | Requiere acción del usuario |
+| CONF-010 | 2026-11-20 | `httpx` registró en `logs/bot.log` la URL de Telegram con el token durante el arranque | Alto | Se eliminó el log, se agregó redacción de secretos y se bajó `httpx`/`httpcore` a `WARNING`. El usuario aceptó la circulación local del token por ser un equipo personal; no se subió al repositorio | Mitigado y aceptado |
 | CONF-011 | 2026-11-20 | El `.env` de Diseño apunta `DB_PATH` a Termux; el bot local intentaba usar esa ruta | Bajo | La copia local `Desarrollo/.env` usa `DB_PATH=./data/gastos.db`; el original queda para Termux | Resuelto |
 | CONF-012 | 2026-11-20 | Sin `job-queue`, `conversation_timeout` no tenía efecto | Bajo | Se instaló `python-telegram-bot[job-queue]` y se actualizó `requirements.txt` | Resuelto |
+| CONF-013 | 2026-11-20 | El SPEC redirige `nohup` a `logs/bot.log`, pero la app ya usa un `RotatingFileHandler` sobre ese archivo | Bajo | `start.sh` redirige la salida cruda a `logs/nohup.log` y deja `bot.log` para la app (DEC-031) | Resuelto |
+| CONF-014 | 2026-11-20 | El cron original falla si no hay cambios para commitear | Bajo | `backup.sh` verifica `git diff --cached --quiet` y termina sin error (DEC-032) | Resuelto |
+| CONF-015 | 2026-11-20 | El directorio de código (`Desarrollo`) no coincide con la raíz del repositorio | Bajo | `backup.sh` usa `git rev-parse --show-toplevel` para respaldar todo el repo (DEC-032) | Resuelto |
 
 ---
 
@@ -421,7 +429,7 @@ Cobertura funcional verificada:
 
 - **CONF-008 (resuelto):** Python 3.14 + PTB 21.11 requería crear y setear un event loop antes de `run_polling`.
 - **CONF-009 (resuelto):** advertencia conocida de PTB por `per_message=False`; se silenció en `main.py` y `pytest.ini`.
-- **CONF-010 (requiere acción):** durante la prueba de arranque, `httpx` registró la URL de Telegram con el token en `logs/bot.log`. Se eliminó el log, se agregó un filtro de redacción y se bajó `httpx`/`httpcore` a `WARNING`. **Se recomienda rotar el token con @BotFather y actualizar el `.env`.**
+- **CONF-010 (mitigado y aceptado):** durante la prueba de arranque, `httpx` registró la URL de Telegram con el token en `logs/bot.log`. Se eliminó el log, se agregó un filtro de redacción y se bajó `httpx`/`httpcore` a `WARNING`. El usuario aceptó la circulación local del token por ser un equipo personal, siempre que no se suba al repositorio.
 - **CONF-011 (resuelto):** la copia local del `.env` apuntaba a la base de Termux; se ajustó a `./data/gastos.db`. El original de Diseño queda para el dispositivo.
 - **CONF-012 (resuelto):** sin `job-queue`, el timeout de conversación no tenía efecto; se instaló el extra y se actualizó `requirements.txt`.
 - La interacción completa desde un cliente de Telegram (envío real de `/start`, fotos y comandos) queda para la validación del usuario; no se automatizó por requerir una sesión de usuario.
@@ -441,9 +449,75 @@ Cobertura funcional verificada:
 - **Objetivo:** dejar el bot ejecutable desde Telegram con todos los comandos y flujos definidos.
 - **Construido:** persistencia SQLite para PTB, interfaz completa de comprobantes, edición/borrado, comandos stateless, autenticación, logging seguro y arranque en polling.
 - **Verificación:** `pytest -q` → 125 aprobadas, 2 omitidas; `compileall` → OK; token validado con `getMe`; arranque real con `Application started`.
-- **Conflictos:** CONF-008, CONF-009, CONF-011 y CONF-012 resueltos. CONF-010 requiere rotar el token.
-- **Pendientes/riesgos:** rotar el token expuesto; probar el flujo completo desde el cliente de Telegram; revalidar en Python 3.11 de Termux; cuidar la cuota de Gemini.
-- **Estado:** PENDIENTE DE APROBACIÓN. No se avanza a la Instancia 5 hasta recibir el OK del usuario.
+- **Conflictos:** CONF-008, CONF-009, CONF-011 y CONF-012 resueltos. CONF-010 mitigado y aceptado por el usuario como entorno personal.
+- **Pendientes/riesgos:** probar el flujo completo desde el cliente de Telegram; revalidar en Python 3.11 de Termux; cuidar la cuota de Gemini.
+- **Estado:** APROBADA. El usuario pidió continuar con la Instancia 5.
+
+---
+
+# Instancia 5 — Despliegue y operación
+
+## Objetivo y alcance
+
+Dejar el proyecto listo para operar en Termux: scripts de instalación, arranque, parada, estado y respaldo; documentación de despliegue, restauración y diagnóstico; actualización del README.
+
+## Bitácora
+
+| ID | Fecha/hora | Tipo | Descripción | Archivos | Verificación | Resultado |
+|---|---|---|---|---|---|---|
+| I5-001 | 2026-11-20 18:30 | agregado | Scripts de arranque, parada y estado con PID y logs separados | `scripts/start.sh`, `scripts/stop.sh`, `scripts/status.sh` | `bash -n`; ejecución sin bot | OK |
+| I5-002 | 2026-11-20 18:35 | agregado | Respaldo con copia local consistente de SQLite y push solo de código | `scripts/backup.sh` | `bash -n`; revisión de rutas | OK |
+| I5-003 | 2026-11-20 18:40 | agregado | Instalador para Termux (Python, Git, venv, dependencias y `.env`) | `scripts/install_termux.sh` | `bash -n` | OK |
+| I5-004 | 2026-11-20 18:45 | agregado | Guía de despliegue con diagrama, operación, cron, restauración y diagnóstico | `docs/despliegue.md` | Revisión de contenido | OK |
+| I5-005 | 2026-11-20 18:50 | cambio | README actualizado con scripts, estructura y estado | `README.md` | Revisión de contenido | OK |
+| I5-006 | 2026-11-20 18:55 | verificación | Suite completa, compilación y scripts | `scripts/`, `tests/`, `main.py` | `pytest -q`, `compileall`, `bash -n` | 125 aprobadas, 2 omitidas; OK |
+
+## Verificación ejecutada
+
+```text
+$ bash -n scripts/*.sh
+bash -n OK
+
+$ ./scripts/status.sh
+Bot detenido.
+Base: 60K
+
+$ ./scripts/stop.sh
+No hay bot.pid; el bot no está corriendo (o no se inició con scripts/start.sh).
+
+$ .venv/bin/python -m pytest -q
+125 passed, 2 skipped in 5.01s
+
+$ .venv/bin/python -m compileall -q . -x '/\.venv/'
+compileall OK
+```
+
+No se ejecutó `start.sh` en esta instancia para no volver a usar el token en la terminal; el arranque real ya se validó en la Instancia 4 con `getMe`, `setMyCommands`, `deleteWebhook` y `Application started`.
+
+## Conflictos y observaciones
+
+- **CONF-013 (resuelto):** `nohup` y el `RotatingFileHandler` apuntaban al mismo archivo; la salida cruda va a `logs/nohup.log`.
+- **CONF-014 (resuelto):** el respaldo ahora tolera la ausencia de cambios y no falla en cron.
+- **CONF-015 (resuelto):** el respaldo se ejecuta desde la raíz real del repositorio, no solo desde `Desarrollo`.
+- El respaldo de la base es local (`data/backups/`) y no se versiona; GitHub recibe solo código y documentación.
+- El bot está listo para probar desde Telegram; la validación de la interacción real queda a cargo del usuario.
+- La instalación en Termux y el cron real deben verificarse en el dispositivo durante el despliegue final.
+
+## Archivos entregados
+
+- `scripts/start.sh`, `scripts/stop.sh`, `scripts/status.sh`, `scripts/backup.sh`, `scripts/install_termux.sh`.
+- `docs/despliegue.md`.
+- `README.md` actualizado.
+- `documentacion.md` actualizado.
+
+## Mini informe de checkpoint C5
+
+- **Objetivo:** dejar el proyecto operable y documentado para Termux.
+- **Construido:** scripts de ciclo de vida, respaldo local + GitHub, instalador y guía completa de despliegue.
+- **Verificación:** `pytest -q` → 125 aprobadas, 2 omitidas; `compileall` → OK; `bash -n` → OK; `status.sh` y `stop.sh` responden.
+- **Conflictos:** CONF-013, CONF-014 y CONF-015 resueltos.
+- **Pendientes/riesgos:** probar el flujo completo en Telegram; desplegar y validar el cron en el Moto G7; revalidar en Python 3.11.
+- **Estado:** PENDIENTE DE APROBACIÓN.
 
 ---
 
@@ -455,4 +529,5 @@ Cobertura funcional verificada:
 | C1 | 1 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
 | C2 | 2 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
 | C3 | 3 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua”; 96 pruebas con validación real |
-| C4 | 4 | 2026-11-20 | PENDIENTE DE OK | 125 pruebas, arranque real validado; requiere rotar el token |
+| C4 | 4 | 2026-11-20 | APROBADA | Aprobación implícita al pedir continuar; token aceptado en entorno personal |
+| C5 | 5 | 2026-11-20 | PENDIENTE DE OK | Scripts y guía de despliegue; 125 pruebas y `bash -n` OK |
