@@ -37,6 +37,13 @@ INSTRUCCION_SISTEMA = (
     "Respondés únicamente con JSON válido, sin explicaciones."
 )
 
+def _es_error_transitorio(exc: Exception) -> bool:
+    codigo = getattr(exc, "code", None)
+    if codigo is None:
+        codigo = getattr(exc, "status_code", None)
+    return codigo in {429, 500, 502, 503, 504}
+
+
 ESQUEMA_RESPUESTA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -190,6 +197,7 @@ class Traductor:
                     intento + 1,
                 )
                 if intento == 0:
+                    await asyncio.sleep(0.5)
                     continue
                 raise ErrorTraduccion(
                     "El servicio tardó más de lo esperado. "
@@ -198,6 +206,14 @@ class Traductor:
             except ErrorTraduccion:
                 raise
             except Exception as exc:
+                if _es_error_transitorio(exc) and intento == 0:
+                    logger.warning(
+                        "Gemini transitorio: modelo=%s codigo=%s",
+                        self.modelo,
+                        getattr(exc, "code", getattr(exc, "status_code", None)),
+                    )
+                    await asyncio.sleep(1.5)
+                    continue
                 logger.warning(
                     "Gemini error: modelo=%s tipo=%s",
                     self.modelo,

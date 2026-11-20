@@ -46,7 +46,7 @@ except ValueError:
     TELEGRAM_CHAT_ID = None
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
 ZONA_HORARIA = os.getenv("TZ", "America/Argentina/Buenos_Aires").strip()
 

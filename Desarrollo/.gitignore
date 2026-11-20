@@ -1,5 +1,7 @@
 # Entorno y secretos
 .env
+.env.*
+!.env.example
 *.env
 .venv/
 venv/
@@ -17,6 +19,10 @@ logs/
 *.db
 *.db-wal
 *.db-shm
+
+# Comprobantes reales usados en pruebas locales (no versionar)
+tests/fixtures/*
+!tests/fixtures/.gitkeep
 
 # Sistema
 .DS_Store

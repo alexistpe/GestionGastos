@@ -40,6 +40,10 @@ class _Cliente:
         self.aio = _Aio(_Modelos(respuestas))
 
 
+class _ErrorTransitorio(Exception):
+    code = 503
+
+
 def json_valido(**cambios):
     datos = {
         "fecha": "2026-11-15",
@@ -159,6 +163,26 @@ async def test_timeout_dos_veces_falla():
         await traductor.traducir_comprobante(b"x", "image/png")
 
     assert "tardó" in str(error.value)
+    assert len(cliente.aio.models.llamadas) == 2
+
+
+async def test_error_transitorio_reintenta_una_vez():
+    cliente = _Cliente([_ErrorTransitorio(), json_valido()])
+    traductor = Traductor(cliente=cliente, timeout=1)
+
+    resultado = await traductor.traducir_comprobante(b"x", "image/png")
+
+    assert resultado.monto == 15000
+    assert len(cliente.aio.models.llamadas) == 2
+
+
+async def test_error_transitorio_dos_veces_falla():
+    cliente = _Cliente([_ErrorTransitorio(), _ErrorTransitorio()])
+    traductor = Traductor(cliente=cliente, timeout=1)
+
+    with pytest.raises(ErrorTraduccion):
+        await traductor.traducir_comprobante(b"x", "image/png")
+
     assert len(cliente.aio.models.llamadas) == 2
 
 

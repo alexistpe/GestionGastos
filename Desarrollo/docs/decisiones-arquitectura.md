@@ -86,8 +86,10 @@ El DDL completo está en `database/schema.sql`.
 ### 5.1 SDK y modelo
 
 - SDK: `google-genai`.
-- Modelo: variable `GEMINI_MODEL`, por defecto `gemini-2.5-flash`.
+- Modelo: variable `GEMINI_MODEL`, por defecto `gemini-3.1-flash-lite`.
 - Se documenta que el nombre del modelo puede cambiar; no se hardcodea en la lógica.
+- `gemini-2.5-flash` dejó de estar disponible para cuentas nuevas (CONF-006).
+- `gemini-3.8-flash` y `gemini-3.7-flash` respondieron 503 por alta demanda durante la validación (CONF-007); se eligió `gemini-3.1-flash-lite` por disponibilidad y funcionamiento comprobado con dos comprobantes reales. Se puede configurar un modelo más potente por entorno cuando esté disponible.
 
 ### 5.2 Entrada
 
@@ -127,8 +129,10 @@ El DDL completo está en `database/schema.sql`.
 ### 5.5 Prueba de integración
 
 - La lógica se prueba con un cliente falso, sin red.
-- Existe un test opcional que llama a Gemini real si están definidos `GEMINI_API_KEY` y `TEST_RECEIPT_PATH`, o si existe `tests/fixtures/comprobante.pdf`.
-- Sin credenciales, el test se omite; no se envían datos personales sin autorización.
+- Existe un test que llama a Gemini real si se define `RUN_GEMINI_INTEGRATION=1`, hay `GEMINI_API_KEY` y hay comprobantes en `TEST_RECEIPT_PATH` o `tests/fixtures/`.
+- La validación real se ejecutó con dos comprobantes PNG y `gemini-3.1-flash-lite`; ambos devolvieron monto, fecha y balance.
+- Por defecto el test se omite para no consumir la cuota mensual en cada corrida.
+- Los comprobantes reales y el `.env` están ignorados por `.gitignore`: no se versionan ni se exponen claves o datos financieros.
 
 ---
 

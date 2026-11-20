@@ -62,7 +62,7 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | DEC-001 | Python 3.11+, PTB v21, SQLite, long polling | Stack definido en el SPEC; portabilidad y bajo consumo |
 | DEC-002 | Schema base del SPEC + `avisos_disparados` + `sesion_estado.nombre_conversacion` | Deduplicar alertas y soportar persistencia de PTB sin romper las tablas base |
 | DEC-003 | Persistencia conversacional con `BasePersistence` respaldado por SQLite | Coherencia con el proyecto y trazabilidad por SQL; se prioriza SQLite sobre pickle |
-| DEC-004 | `google-genai` + modelo configurable (`GEMINI_MODEL`, por defecto `gemini-2.5-flash`) | El SDK `google-generativeai` está deprecado; el modelo debe poder cambiarse sin tocar código |
+| DEC-004 | `google-genai` + modelo configurable (`GEMINI_MODEL`, por defecto `gemini-3.1-flash-lite`) | El SDK `google-generativeai` está deprecado; el modelo debe poder cambiarse sin tocar código y funcionar con la cuenta disponible |
 | DEC-005 | Gemini extrae `fecha`, `destino`, `monto`, `balance` y `moneda`; `balance` puede ser nulo si es ambiguo | El usuario envía el comprobante y el sistema interpreta automáticamente; la confirmación resuelve la ambigüedad |
 | DEC-006 | Logging con `RotatingFileHandler` (1 MB × 3) y nivel configurable | Diagnóstico liviano y sin crecimiento indefinido en el teléfono |
 | DEC-007 | Transacciones explícitas con `with conn:` y `PRAGMA foreign_keys=ON` por conexión | Integridad de datos y rollback consistente |
@@ -83,6 +83,7 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | DEC-022 | Gemini devuelve JSON con `fecha`, `destino`, `monto`, `balance` y `moneda`; Python valida y normaliza | Evita confiar ciegamente en el modelo y permite completar datos faltantes en la confirmación |
 | DEC-023 | Timeout de 15 s con un reintento y errores en español | Cumple el SPEC y evita esperas indefinidas en el teléfono |
 | DEC-024 | La prueba real con Gemini es un test de integración opcional que requiere `GEMINI_API_KEY` y un comprobante | No se fuerzan credenciales ni se envían datos personales sin autorización |
+| DEC-025 | Los comprobantes reales de prueba y el `.env` no se versionan; `tests/fixtures/*` está ignorado | Proteger datos financieros personales y claves del repositorio |
 
 ---
 
@@ -94,7 +95,9 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | CONF-002 | 2026-11-20 | El SPEC no define deduplicación de alertas y, evaluando en cada INSERT, la misma alerta se repetiría | Medio | Se agrega `avisos_disparados` (DEC-010) | Resuelto |
 | CONF-003 | 2026-11-20 | El SPEC solo permitía editar antes de confirmar; el usuario necesita corregir comprobantes ya guardados | Medio | Se agrega flujo de edición y borrado (DEC-008, DEC-009) | Resuelto |
 | CONF-004 | 2026-11-20 | `pytest-asyncio` emitió una advertencia por el alcance del event loop | Bajo | Se agregó `pytest.ini` con `asyncio_default_fixture_loop_scope = function` | Resuelto |
-| CONF-005 | 2026-11-20 | El entorno no tiene `GEMINI_API_KEY` ni un comprobante de prueba disponible | Medio | Se implementó un test de integración opcional que se saltea sin credenciales; la validación real queda pendiente de que el usuario provea la clave y un comprobante | Pendiente |
+| CONF-005 | 2026-11-20 | El entorno no tiene `GEMINI_API_KEY` ni un comprobante de prueba disponible | Medio | Se implementó un test de integración opcional; el usuario proveyó la clave, dos comprobantes y la validación real se ejecutó | Resuelto |
+| CONF-006 | 2026-11-20 | `gemini-2.5-flash` ya no está disponible para cuentas nuevas (404) | Medio | Se actualizó el modelo configurable y se validó con la lista de modelos de la cuenta (DEC-004) | Resuelto |
+| CONF-007 | 2026-11-20 | `gemini-3.8-flash` y `gemini-3.7-flash` devolvieron 503 por alta demanda durante la validación | Medio | Se adoptó `gemini-3.1-flash-lite` como default por disponibilidad; los dos comprobantes reales se procesaron correctamente | Resuelto |
 
 ---
 
@@ -283,21 +286,31 @@ Implementar la extracción automática de datos de comprobantes (imagen o PDF) c
 | I3-001 | 2026-11-20 15:50 | proceso | Instalación de `google-genai` y `python-dotenv` en el venv local | `.venv/` (no versionado) | `google-genai 3.6.1` importado | OK |
 | I3-002 | 2026-11-20 15:55 | agregado | Wrapper de Gemini con esquema JSON, validación, timeout y reintento | `modules/traductor.py` | `pytest tests/test_traductor.py` | OK (15 pruebas) |
 | I3-003 | 2026-11-20 15:58 | agregado | Integración de traducción en el orquestador | `modules/gestion.py` | `pytest tests/test_gestion.py` | OK |
-| I3-004 | 2026-11-20 16:00 | agregado | Test de integración real opcional, protegido por credenciales y archivo | `tests/test_traductor_integracion.py` | `pytest -q` | 1 prueba omitida por falta de credenciales |
-| I3-005 | 2026-11-20 16:02 | verificación | Suite completa y compilación | `modules/`, `tests/` | `pytest -q` y `compileall` | 92 aprobadas, 1 omitida; `compileall OK` |
+| I3-004 | 2026-11-20 16:00 | agregado | Test de integración real opcional, protegido por credenciales y archivo | `tests/test_traductor_integracion.py` | `pytest -q` | Creado; omitido inicialmente sin credenciales |
+| I3-005 | 2026-11-20 16:02 | verificación | Suite completa y compilación (antes de la validación real) | `modules/`, `tests/` | `pytest -q` y `compileall` | 92 aprobadas, 1 omitida; `compileall OK` |
 | I3-006 | 2026-11-20 16:05 | agregado | Registro de modelo, MIME y resultado en el logger del traductor | `modules/traductor.py` | `pytest tests/test_traductor.py` | OK |
+| I3-007 | 2026-11-20 16:15 | verificación | Validación real con 2 comprobantes locales y credenciales del `.env` | `tests/fixtures/`, `tests/test_traductor_integracion.py` | `pytest tests/test_traductor_integracion.py` | 2 aprobadas |
+| I3-008 | 2026-11-20 16:20 | corrección | `gemini-2.5-flash` devolvió 404 y `gemini-3.8/3.7-flash` 503; se adoptó `gemini-3.1-flash-lite` y se agregó reintento para errores transitorios | `config.py`, `.env.example`, `modules/traductor.py`, `tests/test_traductor.py` | `pytest -q` | 94 pruebas mock aprobadas |
+| I3-009 | 2026-11-20 16:23 | proceso | Protección de fixtures reales y `.env` en `.gitignore` | `.gitignore`, `tests/fixtures/.gitkeep` | `git check-ignore` | Claves y comprobantes ignorados |
+| I3-010 | 2026-11-20 16:25 | verificación | Suite completa con validación real y compilación | `modules/`, `tests/` | `pytest -q` y `compileall` | 96 aprobadas; `compileall OK` |
 
 ## Verificación ejecutada
 
 ```text
 $ .venv/bin/python -m pytest -q
-........................................................................ [ 77%]
-....................s                                                    [100%]
-92 passed, 1 skipped in 0.78s
+........................................................................ [ 75%]
+......................ss                                                 [100%]
+94 passed, 2 skipped in 4.85s
+
+$ RUN_GEMINI_INTEGRATION=1 .venv/bin/python -m pytest -q tests/test_traductor_integracion.py
+..                                                                       [100%]
+2 passed in 10.14s
 
 $ .venv/bin/python -m compileall -q . -x '/\.venv/'
 compileall OK
 ```
+
+La integración real queda desactivada por defecto para no consumir la cuota de Gemini en cada corrida; se habilita con `RUN_GEMINI_INTEGRATION=1`.
 
 Cobertura funcional verificada:
 
@@ -306,14 +319,17 @@ Cobertura funcional verificada:
 - Parseo de JSON, incluyendo respuestas con cercas de código.
 - Normalización de fecha, monto, balance y moneda.
 - Detección de campos faltantes con advertencias para la confirmación.
-- Reintento ante timeout y error definitivo con mensaje en español.
+- Reintento ante timeout y errores transitorios (429/5xx) con backoff.
 - Propagación de errores de configuración (falta de API key).
 - Integración `Gestion.iniciar_traduccion()` con inyección de un traductor falso.
+- **Validación real:** dos comprobantes PNG procesados por `gemini-3.1-flash-lite`; monto, fecha y balance detectados en ambos.
 
 ## Conflictos y observaciones
 
-- **CONF-005:** no hay `GEMINI_API_KEY` ni un comprobante de prueba en el entorno. La prueba real no se ejecutó; queda un test de integración opcional que se activa al definir `GEMINI_API_KEY` y `TEST_RECEIPT_PATH` (o colocar el archivo en `tests/fixtures/comprobante.pdf`).
-- No se enviaron datos personales a Gemini durante la verificación.
+- **CONF-005 (resuelto):** el usuario proveyó la clave y dos comprobantes; la validación real se ejecutó con éxito.
+- **CONF-006 (resuelto):** `gemini-2.5-flash` ya no está disponible para cuentas nuevas (404); el modelo es configurable.
+- **CONF-007 (resuelto):** `gemini-3.8-flash` y `gemini-3.7-flash` devolvieron 503 por alta demanda; se adoptó `gemini-3.1-flash-lite` como default y se agregó reintento para 5xx/429.
+- Los comprobantes reales y el `.env` están ignorados por `.gitignore`; no se versionaron ni se expusieron claves.
 - El módulo registra modelo, MIME y resultado en el logger; la configuración de handlers y rotación queda para la Instancia 4.
 
 ## Archivos entregados
@@ -321,15 +337,17 @@ Cobertura funcional verificada:
 - `modules/traductor.py`.
 - `modules/gestion.py` (integración de traducción).
 - `tests/test_traductor.py`.
-- `tests/test_traductor_integracion.py` (opcional, omitido sin credenciales).
+- `tests/test_traductor_integracion.py` (se activa con credenciales y fixtures locales).
+- `tests/fixtures/.gitkeep` (los comprobantes reales no se versionan).
+- `.gitignore`, `.env.example` y `config.py` actualizados.
 
 ## Mini informe de checkpoint C3
 
-- **Objetivo:** dejar lista la extracción automática de comprobantes con Gemini, testeada sin depender de la red.
-- **Construido:** wrapper de Gemini, esquema de salida, validación/normalización, timeout con reintento, integración con `Gestion` y 15 pruebas nuevas.
-- **Verificación:** `pytest -q` → 92 aprobadas, 1 omitida; `compileall` → OK.
-- **Conflictos:** CONF-005 (sin credenciales ni comprobante real); la prueba real queda pendiente.
-- **Pendientes/riesgos:** validar contra la API real cuando el usuario provea la clave y un comprobante; confirmar disponibilidad del modelo configurado.
+- **Objetivo:** dejar funcionando la extracción automática de comprobantes con Gemini, validada con comprobantes reales.
+- **Construido:** wrapper de Gemini, esquema de salida, validación/normalización, timeout/reintento, integración con `Gestion`, 17 pruebas mock nuevas + 2 de integración real y protección de fixtures/claves.
+- **Verificación:** `pytest -q` → 94 aprobadas, 2 omitidas; `RUN_GEMINI_INTEGRATION=1 pytest tests/test_traductor_integracion.py` → 2 aprobadas; `compileall` → OK.
+- **Conflictos:** CONF-005, CONF-006 y CONF-007 resueltos. Sin conflictos abiertos.
+- **Pendientes/riesgos:** la disponibilidad del modelo puede variar; `GEMINI_MODEL` permite cambiarlo. La cuota mensual se monitoreará en la capa de bot.
 - **Estado:** PENDIENTE DE APROBACIÓN. No se avanza a la Instancia 4 hasta recibir el OK del usuario.
 
 ---
@@ -341,4 +359,4 @@ Cobertura funcional verificada:
 | C0 | 0 | 2026-11-20 | APROBADA | Aprobación explícita del usuario con condiciones incorporadas |
 | C1 | 1 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
 | C2 | 2 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
-| C3 | 3 | 2026-11-20 | PENDIENTE DE OK | 92 pruebas aprobadas, 1 omitida; prueba real pendiente de credenciales |
+| C3 | 3 | 2026-11-20 | PENDIENTE DE OK | 96 pruebas aprobadas (94 mock + 2 reales); modelo validado y credenciales fuera del repo |
