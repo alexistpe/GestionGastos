@@ -208,8 +208,8 @@ El desarrollo se organiza en **instancias** con puntos de control. La bitácora 
 | 0 | Planificación, decisiones y guía de comandos | Aprobada |
 | 1 | Núcleo de datos: schema, acceso y parsers | Aprobada |
 | 2 | Motor de negocio: resumen, avisos y gestión | Aprobada |
-| 3 | Extracción con Gemini | Pendiente de OK (96 pruebas, incluida validación real) |
-| 4 | Interfaz Telegram completa | Pendiente |
+| 3 | Extracción con Gemini | Aprobada (validación real con 2 comprobantes) |
+| 4 | Interfaz Telegram completa | Pendiente de OK (125 pruebas, arranque validado) |
 | 5 | Despliegue y operación | Pendiente |
 
 ## Documentación

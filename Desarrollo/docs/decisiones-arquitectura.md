@@ -72,12 +72,16 @@ El DDL completo está en `database/schema.sql`.
 **Decisión:** implementar `SQLitePersistence(BasePersistence)` sobre `sesion_estado`.
 
 - `estado_actual` guarda el estado del `ConversationHandler` como texto.
-- `contexto_json` guarda un sobre con los datos temporales y el `id_comprobante` cuando corresponda.
+- `contexto_json` guarda `context.user_data`, que incluye el borrador del comprobante y los datos temporales de edición.
+- `nombre_conversacion` identifica el flujo (`comprobante` o `edicion`).
+- `get_conversations` devuelve claves `(chat_id, chat_id)` porque el bot es privado y de un único usuario.
+- `store_data` solo persiste `user_data`; chat, bot y callback data quedan en memoria.
 - Al arrancar, se restauran los estados vigentes y se eliminan los que superan una hora; el usuario recibe un aviso.
+- El timeout en proceso se apoya en `python-telegram-bot[job-queue]`.
 - Se prefiere SQLite a `PicklePersistence` por coherencia, inspeccionabilidad y posibilidad de limpieza con SQL.
-- **Fallback:** si la API de `BasePersistence` resulta incompatible con la versión instalada de PTB, se usa `PicklePersistence` con espejo en `sesion_estado`. La decisión se valida en la Instancia 4 con una prueba real de reinicio.
+- La implementación se validó con PTB 21.11; no fue necesario el fallback a pickle.
 
-**Concurrencia:** una sola conversación multi-paso por chat. Los comandos stateless no requieren estado. Si el usuario inicia un flujo con otro abierto, el bot pide terminarlo o usar `/cancelar`.
+**Concurrencia:** una sola conversación multi-paso por chat. Los entry points de registro y edición consultan `sesion_estado` y rechazan solapamientos. Los comandos stateless no requieren estado. Si el usuario inicia un flujo con otro abierto, el bot pide terminarlo o usar `/cancelar`.
 
 ---
 
@@ -268,6 +272,9 @@ Reglas:
 - Formato: `%(asctime)s %(levelname)s %(name)s :: %(message)s`.
 - Nivel `INFO` por defecto, configurable con `LOG_LEVEL`.
 - Nunca se registran tokens, claves ni el contenido completo de los comprobantes.
+- Un filtro de redacción reemplaza `TELEGRAM_BOT_TOKEN` y `GEMINI_API_KEY` por `***` en cualquier mensaje de log.
+- `httpx` y `httpcore` se fijan en `WARNING` porque sus logs INFO incluyen la URL de Telegram con el token.
+- Si un token llega a exponerse, debe rotarse con @BotFather y actualizar el `.env`.
 
 ---
 
@@ -285,9 +292,10 @@ Reglas:
 
 - El bot solo responde al `TELEGRAM_CHAT_ID` configurado.
 - Los mensajes de remitentes no autorizados se ignoran sin respuesta.
-- `.env`, `data/` y `logs/` no se versionan.
+- `.env`, `data/`, `logs/` y los comprobantes de prueba no se versionan.
 - El respaldo a GitHub incluye solo código y documentación.
-- No se registran datos sensibles en logs.
+- No se registran datos sensibles en logs; además, los secretos se redactan.
+- Las claves que se expongan accidentalmente deben rotarse.
 
 ---
 
@@ -297,6 +305,9 @@ Reglas:
 - Base en `data/gastos.db`, logs en `logs/bot.log`.
 - Ejecución con `nohup` y archivo `bot.pid`.
 - Respaldo diario con cron a las 03:00.
+- Dependencia `python-telegram-bot[job-queue]` para los timeouts de conversación.
+- En Python 3.14 se crea y setea un event loop antes de `run_polling`; en Termux (3.11/3.12) el mismo código funciona.
+- La copia local de desarrollo usa `DB_PATH=./data/gastos.db`; el `.env` de Termux mantiene la ruta absoluta del dispositivo.
 - El diagrama de despliegue final se entrega en `docs/despliegue.md` durante la Instancia 5.
 
 ---
@@ -311,6 +322,8 @@ Reglas:
 | Alertas repetidas | `avisos_disparados` por período |
 | Errores de OCR | Confirmación editable y edición posterior |
 | Crecimiento de logs | Rotación por tamaño |
+| Tokens en logs | Redacción de secretos y `httpx/httpcore` en `WARNING`; rotación ante exposición |
+| Python 3.14 sin event loop implícito | Crear y setear el loop antes de `run_polling` |
 | Pérdida del teléfono | Respaldo del código en GitHub; la base puede respaldarse aparte |
 
 ---

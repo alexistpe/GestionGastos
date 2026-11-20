@@ -5,7 +5,7 @@
 - **Rama:** `main`
 - **Código:** `Desarrollo/`
 - **Inicio:** 2026-11-20
-- **Estado general:** Instancia 3 completada; pendiente de aprobación (C3)
+- **Estado general:** Instancia 4 completada; pendiente de aprobación (C4)
 
 Este documento es la bitácora general del proyecto. Registra cada cambio, decisión, conflicto y proceso relevante. Se organiza por **instancias** y cada instancia cierra con un **checkpoint** que requiere aprobación explícita antes de continuar.
 
@@ -30,8 +30,8 @@ Este documento es la bitácora general del proyecto. Registra cada cambio, decis
 | 0 | Planificación y arquitectura | C0 | APROBADA |
 | 1 | Núcleo de datos: schema, acceso y parsers | C1 | APROBADA |
 | 2 | Motor de negocio: resumen, avisos y gestión | C2 | APROBADA |
-| 3 | Extracción con Gemini | C3 | PENDIENTE DE OK |
-| 4 | Interfaz Telegram completa | C4 | PENDIENTE |
+| 3 | Extracción con Gemini | C3 | APROBADA |
+| 4 | Interfaz Telegram completa | C4 | PENDIENTE DE OK |
 | 5 | Despliegue y operación | C5 | PENDIENTE |
 
 ---
@@ -84,6 +84,11 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | DEC-023 | Timeout de 15 s con un reintento y errores en español | Cumple el SPEC y evita esperas indefinidas en el teléfono |
 | DEC-024 | La prueba real con Gemini es un test de integración opcional que requiere `GEMINI_API_KEY` y un comprobante | No se fuerzan credenciales ni se envían datos personales sin autorización |
 | DEC-025 | Los comprobantes reales de prueba y el `.env` no se versionan; `tests/fixtures/*` está ignorado | Proteger datos financieros personales y claves del repositorio |
+| DEC-026 | Persistencia PTB: `estado_actual` guarda el estado y `contexto_json` guarda `context.user_data` (incluido el borrador) | PTB 21 guarda solo el estado de la conversación; el contexto de trabajo vive en `user_data` |
+| DEC-027 | Una sola conversación multi-paso por chat; los entry points consultan `sesion_estado` y rechazan solapamientos | Evita que registro y edición se pisen en una tabla con una fila por chat |
+| DEC-028 | Logging con redacción de secretos y `httpx`/`httpcore` en `WARNING` | Evita que la URL de Telegram con el token quede en los logs |
+| DEC-029 | Crear y setear un event loop antes de `run_polling` | Python 3.14 ya no crea un loop implícito; el workaround también funciona en 3.11 |
+| DEC-030 | Instalar `python-telegram-bot[job-queue]` | Habilita `conversation_timeout` para expirar conversaciones en memoria |
 
 ---
 
@@ -98,6 +103,11 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | CONF-005 | 2026-11-20 | El entorno no tiene `GEMINI_API_KEY` ni un comprobante de prueba disponible | Medio | Se implementó un test de integración opcional; el usuario proveyó la clave, dos comprobantes y la validación real se ejecutó | Resuelto |
 | CONF-006 | 2026-11-20 | `gemini-2.5-flash` ya no está disponible para cuentas nuevas (404) | Medio | Se actualizó el modelo configurable y se validó con la lista de modelos de la cuenta (DEC-004) | Resuelto |
 | CONF-007 | 2026-11-20 | `gemini-3.8-flash` y `gemini-3.7-flash` devolvieron 503 por alta demanda durante la validación | Medio | Se adoptó `gemini-3.1-flash-lite` como default por disponibilidad; los dos comprobantes reales se procesaron correctamente | Resuelto |
+| CONF-008 | 2026-11-20 | PTB 21.11 con Python 3.14 falló en `run_polling` por falta de event loop implícito | Medio | Se crea y setea un event loop antes de `run_polling` (DEC-029) | Resuelto |
+| CONF-009 | 2026-11-20 | PTB emitió una advertencia por `per_message=False` con `CallbackQueryHandler` | Bajo | Se silencia la advertencia conocida en `main.py` y `pytest.ini` | Resuelto |
+| CONF-010 | 2026-11-20 | `httpx` registró en `logs/bot.log` la URL de Telegram con el token durante el arranque | Alto | Se eliminó el log, se agregó redacción de secretos y se bajó `httpx`/`httpcore` a `WARNING`. **Requiere rotar el token con @BotFather** | Requiere acción del usuario |
+| CONF-011 | 2026-11-20 | El `.env` de Diseño apunta `DB_PATH` a Termux; el bot local intentaba usar esa ruta | Bajo | La copia local `Desarrollo/.env` usa `DB_PATH=./data/gastos.db`; el original queda para Termux | Resuelto |
+| CONF-012 | 2026-11-20 | Sin `job-queue`, `conversation_timeout` no tenía efecto | Bajo | Se instaló `python-telegram-bot[job-queue]` y se actualizó `requirements.txt` | Resuelto |
 
 ---
 
@@ -352,6 +362,91 @@ Cobertura funcional verificada:
 
 ---
 
+# Instancia 4 — Interfaz Telegram completa
+
+## Objetivo y alcance
+
+Implementar la interfaz completa del bot: persistencia del estado, registro de comprobantes con confirmación y edición, edición/borrado posterior, comandos de balance, análisis, alertas, etiquetas, ayuda, autenticación y arranque en polling.
+
+## Bitácora
+
+| ID | Fecha/hora | Tipo | Descripción | Archivos | Verificación | Resultado |
+|---|---|---|---|---|---|---|
+| I4-001 | 2026-11-20 17:05 | agregado | Listado de estados y persistencia PTB sobre SQLite | `database/db.py`, `modules/persistencia.py` | `pytest tests/test_persistencia.py` | OK |
+| I4-002 | 2026-11-20 17:10 | agregado | Teclados inline, formatos y guía de ayuda | `utils/telegram.py` | `pytest tests/test_ui.py` | OK |
+| I4-003 | 2026-11-20 17:20 | agregado | Flujo de comprobantes con extracción, selector, confirmación y edición previa | `handlers/comprobante_handler.py` | `pytest -q` | OK |
+| I4-004 | 2026-11-20 17:30 | agregado | Edición y borrado de comprobantes guardados | `handlers/edicion_handler.py` | `pytest -q` | OK |
+| I4-005 | 2026-11-20 17:40 | agregado | Handlers de balance, análisis, alertas, etiquetas y sistema | `handlers/balance_handler.py`, `handlers/analisis_handler.py`, `handlers/alerta_handler.py`, `handlers/etiqueta_handler.py`, `handlers/sistema_handler.py` | `pytest tests/test_handlers.py` | OK |
+| I4-006 | 2026-11-20 17:50 | agregado | Arranque, autenticación, logging, menú y registro de handlers | `main.py` | `pytest tests/test_main.py` | OK |
+| I4-007 | 2026-11-20 17:55 | agregado | Pruebas de persistencia, UI, handlers y wiring | `tests/test_persistencia.py`, `tests/test_ui.py`, `tests/test_handlers.py`, `tests/test_main.py` | `pytest -q` | 125 aprobadas, 2 omitidas |
+| I4-008 | 2026-11-20 18:00 | corrección | Instalación de `job-queue` para timeouts de conversación | `requirements.txt` | `APScheduler 3.11.3`; `aplicacion.job_queue` disponible | OK |
+| I4-009 | 2026-11-20 18:05 | verificación | Validación de token y arranque real con polling | `main.py` | `getMe`, `setMyCommands`, `deleteWebhook`; `Application started` | OK, con incidente CONF-010 |
+| I4-010 | 2026-11-20 18:10 | corrección | Redacción de secretos en logs, `httpx/httpcore` en WARNING y eliminación del log expuesto | `main.py`, `tests/test_main.py` | `pytest` y revisión del log | OK |
+| I4-011 | 2026-11-20 18:15 | corrección | Ajuste del `.env` local a `DB_PATH=./data/gastos.db` | `Desarrollo/.env` (ignorado) | Arranque local | OK |
+| I4-012 | 2026-11-20 18:20 | verificación | Suite completa y compilación | `handlers/`, `utils/`, `main.py`, `tests/` | `pytest -q` y `compileall` | 125 aprobadas, 2 omitidas; `compileall OK` |
+
+## Verificación ejecutada
+
+```text
+$ .venv/bin/python -m pytest -q
+........................................................................ [ 56%]
+........................................ss.............                  [100%]
+125 passed, 2 skipped in 5.02s
+
+$ .venv/bin/python -m compileall -q . -x '/\.venv/'
+compileall OK
+
+$ getMe
+Token OK; bot: GastosG7Bot
+
+$ timeout 12s .venv/bin/python main.py
+getMe → 200 OK
+setMyCommands → 200 OK
+deleteWebhook → 200 OK
+Application started
+```
+
+Cobertura funcional verificada:
+
+- Persistencia de estado y `user_data` en SQLite, incluyendo borradores y limpieza al terminar.
+- Conversaciones con timeout de una hora y `job_queue` activo.
+- Flujo de comprobante: descarga, extracción, selector de etiqueta, confirmación, edición previa y borrador persistente.
+- Edición posterior de monto, etiqueta, fecha, balance y destino; borrado con confirmación.
+- Balances manuales, análisis mensual y por rango, alertas y etiquetas.
+- Autenticación por `TELEGRAM_CHAT_ID` y silencio para remitentes no autorizados.
+- Redacción de secretos en logs y bloqueo de logs INFO de `httpx`.
+- Menú de comandos de Telegram y guía `/ayuda`.
+
+## Conflictos y observaciones
+
+- **CONF-008 (resuelto):** Python 3.14 + PTB 21.11 requería crear y setear un event loop antes de `run_polling`.
+- **CONF-009 (resuelto):** advertencia conocida de PTB por `per_message=False`; se silenció en `main.py` y `pytest.ini`.
+- **CONF-010 (requiere acción):** durante la prueba de arranque, `httpx` registró la URL de Telegram con el token en `logs/bot.log`. Se eliminó el log, se agregó un filtro de redacción y se bajó `httpx`/`httpcore` a `WARNING`. **Se recomienda rotar el token con @BotFather y actualizar el `.env`.**
+- **CONF-011 (resuelto):** la copia local del `.env` apuntaba a la base de Termux; se ajustó a `./data/gastos.db`. El original de Diseño queda para el dispositivo.
+- **CONF-012 (resuelto):** sin `job-queue`, el timeout de conversación no tenía efecto; se instaló el extra y se actualizó `requirements.txt`.
+- La interacción completa desde un cliente de Telegram (envío real de `/start`, fotos y comandos) queda para la validación del usuario; no se automatizó por requerir una sesión de usuario.
+
+## Archivos entregados
+
+- `database/db.py` (listado de estados).
+- `modules/persistencia.py`.
+- `utils/telegram.py`.
+- `handlers/comprobante_handler.py`, `handlers/edicion_handler.py`, `handlers/balance_handler.py`, `handlers/analisis_handler.py`, `handlers/alerta_handler.py`, `handlers/etiqueta_handler.py`, `handlers/sistema_handler.py`.
+- `main.py`.
+- `tests/test_persistencia.py`, `tests/test_ui.py`, `tests/test_handlers.py`, `tests/test_main.py`.
+- `requirements.txt` con `python-telegram-bot[job-queue]`.
+
+## Mini informe de checkpoint C4
+
+- **Objetivo:** dejar el bot ejecutable desde Telegram con todos los comandos y flujos definidos.
+- **Construido:** persistencia SQLite para PTB, interfaz completa de comprobantes, edición/borrado, comandos stateless, autenticación, logging seguro y arranque en polling.
+- **Verificación:** `pytest -q` → 125 aprobadas, 2 omitidas; `compileall` → OK; token validado con `getMe`; arranque real con `Application started`.
+- **Conflictos:** CONF-008, CONF-009, CONF-011 y CONF-012 resueltos. CONF-010 requiere rotar el token.
+- **Pendientes/riesgos:** rotar el token expuesto; probar el flujo completo desde el cliente de Telegram; revalidar en Python 3.11 de Termux; cuidar la cuota de Gemini.
+- **Estado:** PENDIENTE DE APROBACIÓN. No se avanza a la Instancia 5 hasta recibir el OK del usuario.
+
+---
+
 ## Historial de checkpoints
 
 | Checkpoint | Instancia | Fecha | Estado | Observaciones |
@@ -359,4 +454,5 @@ Cobertura funcional verificada:
 | C0 | 0 | 2026-11-20 | APROBADA | Aprobación explícita del usuario con condiciones incorporadas |
 | C1 | 1 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
 | C2 | 2 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
-| C3 | 3 | 2026-11-20 | PENDIENTE DE OK | 96 pruebas aprobadas (94 mock + 2 reales); modelo validado y credenciales fuera del repo |
+| C3 | 3 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua”; 96 pruebas con validación real |
+| C4 | 4 | 2026-11-20 | PENDIENTE DE OK | 125 pruebas, arranque real validado; requiere rotar el token |

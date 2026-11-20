@@ -496,6 +496,34 @@ def obtener_estado(
         return datos
 
 
+def listar_estados(
+    nombre_conversacion: str | None = None,
+    db_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    if nombre_conversacion is None:
+        consulta = "SELECT * FROM sesion_estado ORDER BY timestamp ASC"
+        parametros: tuple[Any, ...] = ()
+    else:
+        consulta = (
+            "SELECT * FROM sesion_estado "
+            "WHERE nombre_conversacion = ? ORDER BY timestamp ASC"
+        )
+        parametros = (nombre_conversacion,)
+
+    with conectar(db_path) as conn:
+        filas = conn.execute(consulta, parametros).fetchall()
+        resultado: list[dict[str, Any]] = []
+        for fila in filas:
+            datos = dict(fila)
+            datos["contexto"] = (
+                json.loads(datos["contexto_json"])
+                if datos["contexto_json"]
+                else None
+            )
+            resultado.append(datos)
+        return resultado
+
+
 def eliminar_estado(
     chat_id: int, db_path: str | Path | None = None
 ) -> bool:
