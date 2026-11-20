@@ -139,7 +139,7 @@ El bot mantiene el estado en memoria y lo respalda en `sesion_estado`. Al arranc
 
 ### 8. Análisis
 
-- **Rápido (`analisis`):** totales del período, comparación con la rutina (gastado y pendiente), gastos no esenciales por etiqueta y balance.
+- **Rápido (`analisis`):** totales del período, comparación con la rutina (gastado y pendiente), gastos no esenciales por etiqueta y balance. Los gastos no esenciales excluyen la rutina y la etiqueta `ahorro`, que se informa por separado.
 - **Por rango (`analisis DD.MM.AA [DD.MM.AA]`):** total ingresado, total gastado, neto, gastos ordenados por etiqueta, ingresos detallados y cálculo de ahorro.
 
 ## Comandos
@@ -206,8 +206,8 @@ El desarrollo se organiza en **instancias** con puntos de control. La bitácora 
 | Instancia | Alcance | Estado |
 |---|---|---|
 | 0 | Planificación, decisiones y guía de comandos | Aprobada |
-| 1 | Núcleo de datos: schema, acceso y parsers | Pendiente de OK (53 pruebas aprobadas) |
-| 2 | Motor de negocio: resumen, avisos y gestión | Pendiente |
+| 1 | Núcleo de datos: schema, acceso y parsers | Aprobada |
+| 2 | Motor de negocio: resumen, avisos y gestión | Pendiente de OK (77 pruebas aprobadas) |
 | 3 | Extracción con Gemini | Pendiente |
 | 4 | Interfaz Telegram completa | Pendiente |
 | 5 | Despliegue y operación | Pendiente |

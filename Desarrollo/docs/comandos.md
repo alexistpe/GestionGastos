@@ -100,7 +100,8 @@ Botones disponibles:
 - gastos por etiqueta, de mayor a menor;
 - ingresos detallados;
 - cálculo de ahorro;
-- comparación con la rutina (gastado y pendiente).
+- comparación con la rutina (gastado y pendiente);
+- gastos no esenciales por etiqueta, excluyendo la rutina y `ahorro`.
 
 **Cuándo usarlo:** para revisar cómo va el mes sin indicar fechas.
 

@@ -5,7 +5,7 @@
 - **Rama:** `main`
 - **Código:** `Desarrollo/`
 - **Inicio:** 2026-11-20
-- **Estado general:** Instancia 1 completada; pendiente de aprobación (C1)
+- **Estado general:** Instancia 2 completada; pendiente de aprobación (C2)
 
 Este documento es la bitácora general del proyecto. Registra cada cambio, decisión, conflicto y proceso relevante. Se organiza por **instancias** y cada instancia cierra con un **checkpoint** que requiere aprobación explícita antes de continuar.
 
@@ -28,8 +28,8 @@ Este documento es la bitácora general del proyecto. Registra cada cambio, decis
 | Instancia | Alcance | Checkpoint | Estado |
 |---|---|---|---|
 | 0 | Planificación y arquitectura | C0 | APROBADA |
-| 1 | Núcleo de datos: schema, acceso y parsers | C1 | PENDIENTE DE OK |
-| 2 | Motor de negocio: resumen, avisos y gestión | C2 | PENDIENTE |
+| 1 | Núcleo de datos: schema, acceso y parsers | C1 | APROBADA |
+| 2 | Motor de negocio: resumen, avisos y gestión | C2 | PENDIENTE DE OK |
 | 3 | Extracción con Gemini | C3 | PENDIENTE |
 | 4 | Interfaz Telegram completa | C4 | PENDIENTE |
 | 5 | Despliegue y operación | C5 | PENDIENTE |
@@ -77,6 +77,9 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | DEC-016 | Push a GitHub en cada cambio significativo, con mensaje descriptivo | Pedido explícito del usuario |
 | DEC-017 | El bot acepta comandos con y sin barra (`analisis` y `/analisis`) | Comodidad de uso en Telegram |
 | DEC-018 | Una sola conversación multi-paso activa por chat | Simplifica el estado y evita condiciones de carrera; los comandos stateless siguen disponibles |
+| DEC-019 | Los gastos no esenciales excluyen la etiqueta `ahorro` | El ahorro es una transferencia entre cuentas, no consumo; se analiza en su propia sección |
+| DEC-020 | El total gastado y la alerta de monto total incluyen todos los `EGRESO`, incluido `ahorro` | Coherencia con la definición de “gastos = registros con `-`”; el ahorro se informa aparte |
+| DEC-021 | El pendiente de rutina se calcula solo para etiquetas con presupuesto (alerta `ETIQUETA`) | No existe un presupuesto por etiqueta en el schema; sin alerta se informa “sin presupuesto definido” |
 
 ---
 
@@ -194,9 +197,79 @@ Cobertura funcional verificada:
 
 ---
 
+# Instancia 2 — Motor de negocio
+
+## Objetivo y alcance
+
+Implementar los cálculos de análisis, la evaluación y deduplicación de alertas y la orquestación de la lógica de negocio sin Telegram ni Gemini.
+
+## Bitácora
+
+| ID | Fecha/hora | Tipo | Descripción | Archivos | Verificación | Resultado |
+|---|---|---|---|---|---|---|
+| I2-001 | 2026-11-20 15:20 | agregado | Formato de montos y fechas | `utils/formato.py` | `pytest tests/test_formato.py` | OK |
+| I2-002 | 2026-11-20 15:24 | agregado | Cálculos de totales, ahorro, rutina y gastos no esenciales | `modules/resumen.py` | `pytest tests/test_resumen.py` | OK (5 pruebas) |
+| I2-003 | 2026-11-20 15:28 | agregado | Evaluación de alertas internas y configuradas con deduplicación | `modules/aviso.py` | `pytest tests/test_aviso.py` | OK (9 pruebas) |
+| I2-004 | 2026-11-20 15:32 | agregado | Orquestador de comprobantes, análisis, alertas y etiquetas | `modules/gestion.py` | `pytest tests/test_gestion.py` | OK (8 pruebas) |
+| I2-005 | 2026-11-20 15:35 | agregado | Pruebas de la instancia | `tests/test_formato.py`, `tests/test_resumen.py`, `tests/test_aviso.py`, `tests/test_gestion.py` | `pytest -q` | 77 pruebas aprobadas |
+| I2-006 | 2026-11-20 15:37 | verificación | Compilación de módulos y pruebas | `modules/`, `utils/`, `tests/` | `compileall` | OK |
+| I2-007 | 2026-11-20 15:40 | decisión | Exclusión de `ahorro` de gastos no esenciales; total gastado incluye todo `EGRESO`; pendiente de rutina solo con presupuesto | `documentacion.md`, `docs/decisiones-arquitectura.md` | Revisión de consistencia | OK |
+
+## Verificación ejecutada
+
+```text
+$ .venv/bin/python -m pytest -q
+........................................................................ [ 93%]
+.....                                                                    [100%]
+77 passed in 0.31s
+
+$ .venv/bin/python -m compileall -q . -x '/\.venv/'
+compileall OK
+```
+
+Cobertura funcional verificada:
+
+- Totales de ingresos, egresos y neto.
+- Cálculo de ahorro con `+ ahorro` y `- ahorro`.
+- Agrupación de gastos por etiqueta de mayor a menor.
+- Ingresos detallados y ordenados.
+- Rutina: gasto, presupuesto, pendiente y completitud.
+- Gastos no esenciales, excluyendo rutina y ahorro.
+- Período mensual desde la última `cuota` y análisis por rango cerrado.
+- Alertas de balance negativo, rutina completa, etiqueta, monto total y extracciones de ahorro.
+- Deduplicación por período y reactivación al cambiar de período.
+- Validaciones de comprobantes, etiquetas y alertas en `Gestion`.
+- Formato argentino de montos y fechas.
+
+## Decisiones y observaciones
+
+- Los gastos no esenciales excluyen `ahorro` porque es una transferencia, no consumo (DEC-019).
+- El total gastado y la alerta de monto total incluyen todos los `EGRESO`, incluido `ahorro` (DEC-020).
+- El pendiente de rutina solo suma etiquetas con presupuesto; el resto se informa “sin presupuesto definido” (DEC-021).
+- La evaluación de alertas usa el resumen del período actual y se dispara una sola vez por período.
+- La presentación definitiva de los textos de análisis se ajustará en la Instancia 4, cuando se integre Telegram.
+
+## Archivos entregados
+
+- `utils/formato.py`.
+- `modules/__init__.py`, `modules/resumen.py`, `modules/aviso.py`, `modules/gestion.py`.
+- `tests/test_formato.py`, `tests/test_resumen.py`, `tests/test_aviso.py`, `tests/test_gestion.py`.
+
+## Mini informe de checkpoint C2
+
+- **Objetivo:** dejar funcionando el motor de negocio completo y verificable, sin dependencias de red.
+- **Construido:** cálculos de análisis, rutina, ahorro y gastos no esenciales; evaluación y deduplicación de cinco tipos de alerta; orquestador de comprobantes, etiquetas y alertas; 24 pruebas nuevas.
+- **Verificación:** `pytest -q` → 77 aprobadas; `compileall` → OK.
+- **Conflictos:** sin conflictos nuevos. Se documentaron tres decisiones de negocio (DEC-019, DEC-020, DEC-021).
+- **Pendientes/riesgos:** los textos finales de los informes se ajustan en la Instancia 4; las dependencias de ejecución siguen pendientes de instalar.
+- **Estado:** PENDIENTE DE APROBACIÓN. No se avanza a la Instancia 3 hasta recibir el OK del usuario.
+
+---
+
 ## Historial de checkpoints
 
 | Checkpoint | Instancia | Fecha | Estado | Observaciones |
 |---|---|---|---|---|
 | C0 | 0 | 2026-11-20 | APROBADA | Aprobación explícita del usuario con condiciones incorporadas |
-| C1 | 1 | 2026-11-20 | PENDIENTE DE OK | 53 pruebas aprobadas; verificación y riesgos registrados |
+| C1 | 1 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
+| C2 | 2 | 2026-11-20 | PENDIENTE DE OK | 77 pruebas aprobadas; motor de negocio completo |

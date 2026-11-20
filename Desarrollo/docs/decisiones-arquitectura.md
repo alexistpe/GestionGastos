@@ -172,7 +172,8 @@ Se evalúan después de cada alta o modificación:
 1. balance neto negativo;
 2. rutina completada;
 3. etiqueta por encima de su límite;
-4. extracciones de ahorro mayores al ingreso neto.
+4. gasto total del período por encima del límite configurado;
+5. extracciones de ahorro mayores al ingreso neto.
 
 La tabla `avisos_disparados` evita repetir una alerta en el mismo período. Claves:
 
@@ -187,8 +188,21 @@ El período se identifica por la fecha de inicio del período actual.
 ### 7.4 Rutina
 
 - Las etiquetas con `es_rutina = 1` son gastos fijos.
-- La rutina se considera completa cuando todas tienen al menos un registro en el período.
+- La rutina se considera completa cuando todas tienen al menos un `EGRESO` en el período.
 - El presupuesto de rutina se toma del `monto_limite` de las alertas de tipo `ETIQUETA`; si no hay alerta, se informa “sin presupuesto definido”.
+- El pendiente total suma solo las etiquetas que tienen presupuesto definido.
+
+### 7.5 Gastos no esenciales
+
+- Se calculan agrupando los `EGRESO` que no pertenecen a etiquetas de rutina.
+- Se excluye la etiqueta `ahorro`, porque es una transferencia entre cuentas y tiene su propio análisis.
+- Se ordenan de mayor a menor monto.
+
+### 7.6 Total gastado y alerta de monto total
+
+- El total gastado (`monto_saliente`) incluye todos los `EGRESO`, incluido `ahorro`, porque la definición contable del SPEC son los registros con `-`.
+- La alerta `MONTO_TOTAL` compara ese total contra el límite configurado.
+- El ahorro se informa por separado para no confundir consumo con transferencia.
 
 ---
 
