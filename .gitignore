@@ -3,3 +3,6 @@
 
 # Copias .txt de los diagramas: los modelos reales son los .puml
 Diseño/*.txt
+
+# Paquetes de transferencia (no versionar)
+dist/

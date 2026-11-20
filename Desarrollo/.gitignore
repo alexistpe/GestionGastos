@@ -19,6 +19,8 @@ logs/
 *.db
 *.db-wal
 *.db-shm
+bot.pid
+*.pid
 
 # Comprobantes reales usados en pruebas locales (no versionar)
 tests/fixtures/*

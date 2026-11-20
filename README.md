@@ -217,9 +217,10 @@ El desarrollo se organiza en **instancias** con puntos de control. La bitácora 
 | 2 | Motor de negocio: resumen, avisos y gestión | Aprobada |
 | 3 | Extracción con Gemini | Aprobada (validación real con 2 comprobantes) |
 | 4 | Interfaz Telegram completa | Aprobada (125 pruebas, arranque validado) |
-| 5 | Despliegue y operación | Pendiente de OK (scripts y guía de despliegue) |
+| 5 | Despliegue y operación | Aprobada (prueba real desde Telegram satisfactoria) |
+| 6 | Despliegue en dispositivo y transferencia | Pendiente de prueba en el teléfono |
 
-El núcleo ya está listo para probar desde Telegram con `./scripts/start.sh`. La Instancia 5 agrega la operación en Termux, los respaldos y la guía de despliegue.
+El bot ya fue probado desde Telegram con el servidor en Linux. Queda el despliegue físico en Termux, para el cual están los scripts, el paquete `dist/gastosBot-termux-*.tar.gz` y la guía [`Desarrollo/docs/despliegue.md`](Desarrollo/docs/despliegue.md) §14.
 
 ## Documentación
 

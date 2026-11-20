@@ -275,3 +275,105 @@ Antes de actualizar, conviene ejecutar `scripts/backup.sh` y conservar la copia 
 - [ ] `./scripts/stop.sh` detiene el proceso.
 - [ ] Cron de respaldo configurado y probado.
 - [ ] Copia local de la base verificada.
+
+---
+
+## 14. Cambio de dispositivo y transferencia
+
+### ¿Funciona en otro Android?
+
+Sí. El proyecto no depende del modelo ni del hardware: solo necesita Termux, Python 3.11+ e Internet. Un Motorola, un Samsung o cualquier Android con Termux puede ejecutar el mismo código. Lo que cambia es la configuración del entorno:
+
+- **Instalar Termux desde F-Droid o GitHub**, no desde Play Store (la versión de Play Store está desactualizada y rompe paquetes).
+- **Rutas:** usá `DB_PATH=./data/gastos.db` (relativo a `Desarrollo/`) o ajustá la ruta absoluta al nuevo dispositivo.
+- **Batería:** Samsung y otros fabricantes suelen ser agresivos con el segundo plano. Deshabilitá la optimización de batería para Termux, permití actividad en segundo plano y usá `termux-wake-lock` si hace falta.
+- **Cron:** la ruta `crontab` debe apuntar al lugar donde clonaste el repo. Si usás `~/gastos`, la línea de ejemplo sigue siendo válida.
+- **Dependencias:** si `pip` intenta compilar `pydantic-core`, instalá las herramientas de compilación y reintentá:
+  ```bash
+  pkg install -y rust binutils
+  .venv/bin/pip install -r requirements.txt
+  ```
+  En la mayoría de los Termux recientes hay wheels disponibles y no hace falta compilar.
+
+### Qué llevar al Termux
+
+**Opción recomendada: clonar el repositorio.**
+
+```bash
+pkg install -y python git
+git clone git@github.com:alexistpe/GestionGastos.git ~/gastos
+cd ~/gastos/Desarrollo
+bash scripts/install_termux.sh
+```
+
+Después solo hay que llevar el `.env` por separado y, si querés conservar los datos, la base `data/gastos.db`.
+
+**Qué NO copiar:**
+
+- `.venv/`: el entorno virtual de Linux no es portable a Android. Se recrea con `scripts/install_termux.sh`.
+- `data/`: la base se recrea o se migra aparte; no copies logs ni backups innecesarios.
+- `logs/`, `.pytest_cache/`, `__pycache__/`, `bot.pid`.
+- `tests/fixtures/*.png|pdf|...`: son comprobantes personales.
+- `.env`: nunca va al repositorio; se transfiere por un canal privado.
+
+**Opción manual: paquete `.tar.gz`.**
+
+En la PC:
+
+```bash
+cd /home/ale/Files/Proyectos/MYSOFT/gastosBot/Desarrollo
+./scripts/empaquetar.sh
+```
+
+El paquete queda en `../dist/gastosBot-termux-YYYYMMDD-HHMM.tar.gz` e incluye `README.md` y `Desarrollo/`, sin `.env`, sin base, sin logs, sin venv y sin fixtures.
+
+Transferencia por `adb` (ejemplo):
+
+```bash
+adb push ../dist/gastosBot-termux-*.tar.gz /sdcard/Download/
+adb push .env /sdcard/Download/env-gastos
+```
+
+En Termux:
+
+```bash
+termux-setup-storage
+mkdir -p ~/gastos
+tar -xzf ~/storage/downloads/gastosBot-termux-*.tar.gz -C ~/gastos
+cp ~/storage/downloads/env-gastos ~/gastos/Desarrollo/.env
+cd ~/gastos/Desarrollo
+bash scripts/install_termux.sh
+nano .env      # ajustar DB_PATH si hace falta
+./scripts/start.sh
+```
+
+### Migrar la base existente
+
+La base SQLite es portable entre dispositivos. Con el bot detenido en la PC:
+
+```bash
+# En la PC
+cd /home/ale/Files/Proyectos/MYSOFT/gastosBot/Desarrollo
+./scripts/stop.sh
+adb push data/gastos.db /sdcard/Download/gastos.db
+```
+
+En Termux:
+
+```bash
+mkdir -p ~/gastos/Desarrollo/data
+cp ~/storage/downloads/gastos.db ~/gastos/Desarrollo/data/gastos.db
+```
+
+Luego iniciá el bot. Si preferís empezar de cero, no copies la base: `main.py` crea el schema y el seed automáticamente.
+
+### Checklist de cambio de dispositivo
+
+- [ ] Termux instalado desde F-Droid/GitHub.
+- [ ] Repo clonado o paquete extraído en `~/gastos`.
+- [ ] `.env` transferido por un canal privado y con `DB_PATH` correcto.
+- [ ] `.venv` recreado en el dispositivo.
+- [ ] Base migrada (opcional) o creada desde cero.
+- [ ] Optimización de batería deshabilitada para Termux.
+- [ ] `./scripts/start.sh` y `/start` funcionando.
+- [ ] Cron de respaldo apuntando a la ruta correcta.

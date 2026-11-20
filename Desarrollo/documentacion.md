@@ -5,7 +5,7 @@
 - **Rama:** `main`
 - **Código:** `Desarrollo/`
 - **Inicio:** 2026-11-20
-- **Estado general:** Instancia 5 completada; pendiente de aprobación (C5)
+- **Estado general:** Instancia 6 en curso; pendiente de prueba en el dispositivo (C6)
 
 Este documento es la bitácora general del proyecto. Registra cada cambio, decisión, conflicto y proceso relevante. Se organiza por **instancias** y cada instancia cierra con un **checkpoint** que requiere aprobación explícita antes de continuar.
 
@@ -32,7 +32,8 @@ Este documento es la bitácora general del proyecto. Registra cada cambio, decis
 | 2 | Motor de negocio: resumen, avisos y gestión | C2 | APROBADA |
 | 3 | Extracción con Gemini | C3 | APROBADA |
 | 4 | Interfaz Telegram completa | C4 | APROBADA |
-| 5 | Despliegue y operación | C5 | PENDIENTE DE OK |
+| 5 | Despliegue y operación | C5 | APROBADA |
+| 6 | Despliegue en dispositivo y transferencia | C6 | PENDIENTE DE PRUEBA EN DISPOSITIVO |
 
 ---
 
@@ -94,6 +95,9 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | DEC-033 | `scripts/install_termux.sh` automatiza Termux; la guía completa vive en `docs/despliegue.md` | Reduce errores de instalación y deja operación reproducible |
 | DEC-034 | La exposición local del token en un equipo personal se considera aceptable siempre que no se versione | Decisión del usuario; se mantienen redacción de logs y `.gitignore` |
 | DEC-035 | El respaldo sube solo código y documentación; la base se copia localmente en `data/backups/` | Proteger datos financieros y mantener una copia recuperable |
+| DEC-036 | El proyecto es portable entre dispositivos Android con Termux; solo cambian rutas y dependencias del entorno | No hay código específico del Moto G7 |
+| DEC-037 | Transferencia recomendada por `git clone`; alternativa `scripts/empaquetar.sh` con `.tar.gz` sin secretos, base, venv ni fixtures | Evita copiar archivos innecesarios o sensibles |
+| DEC-038 | No copiar `.venv` entre dispositivos; recrearlo con `scripts/install_termux.sh` | Los entornos virtuales no son portables entre Linux y Android |
 
 ---
 
@@ -116,6 +120,9 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | CONF-013 | 2026-11-20 | El SPEC redirige `nohup` a `logs/bot.log`, pero la app ya usa un `RotatingFileHandler` sobre ese archivo | Bajo | `start.sh` redirige la salida cruda a `logs/nohup.log` y deja `bot.log` para la app (DEC-031) | Resuelto |
 | CONF-014 | 2026-11-20 | El cron original falla si no hay cambios para commitear | Bajo | `backup.sh` verifica `git diff --cached --quiet` y termina sin error (DEC-032) | Resuelto |
 | CONF-015 | 2026-11-20 | El directorio de código (`Desarrollo`) no coincide con la raíz del repositorio | Bajo | `backup.sh` usa `git rev-parse --show-toplevel` para respaldar todo el repo (DEC-032) | Resuelto |
+| CONF-016 | 2026-11-20 | La versión de Termux de Play Store está desactualizada y rompe paquetes | Medio | La guía recomienda instalar Termux desde F-Droid o GitHub | Resuelto |
+| CONF-017 | 2026-11-20 | El `.venv` de Linux no es portable a Android | Medio | Se excluye de la transferencia y se recrea con `install_termux.sh` (DEC-038) | Resuelto |
+| CONF-018 | 2026-11-20 | El `.env` original tiene una ruta absoluta de Termux que puede no coincidir con el nuevo clon | Bajo | La guía indica usar `DB_PATH=./data/gastos.db` o ajustar la ruta | Resuelto |
 
 ---
 
@@ -514,10 +521,73 @@ No se ejecutó `start.sh` en esta instancia para no volver a usar el token en la
 
 - **Objetivo:** dejar el proyecto operable y documentado para Termux.
 - **Construido:** scripts de ciclo de vida, respaldo local + GitHub, instalador y guía completa de despliegue.
-- **Verificación:** `pytest -q` → 125 aprobadas, 2 omitidas; `compileall` → OK; `bash -n` → OK; `status.sh` y `stop.sh` responden.
+- **Verificación:** `pytest -q` → 125 aprobadas, 2 omitidas; `compileall` → OK; `bash -n` → OK; `status.sh` y `stop.sh` responden. El usuario probó el flujo desde Telegram con el bot corriendo en Linux y no encontró fallos fundamentales.
 - **Conflictos:** CONF-013, CONF-014 y CONF-015 resueltos.
-- **Pendientes/riesgos:** probar el flujo completo en Telegram; desplegar y validar el cron en el Moto G7; revalidar en Python 3.11.
-- **Estado:** PENDIENTE DE APROBACIÓN.
+- **Pendientes/riesgos:** desplegar y validar en el Moto G7; revalidar en Python 3.11.
+- **Estado:** APROBADA. El usuario confirmó la prueba satisfactoria y pidió continuar.
+
+---
+
+# Instancia 6 — Despliegue en dispositivo y transferencia
+
+## Objetivo y alcance
+
+Preparar el traslado del proyecto a Termux, responder dudas de portabilidad entre dispositivos y dejar un paquete seguro para instalar en el teléfono. La ejecución física y la validación final quedan a cargo del usuario.
+
+## Bitácora
+
+| ID | Fecha/hora | Tipo | Descripción | Archivos | Verificación | Resultado |
+|---|---|---|---|---|---|---|
+| I6-001 | 2026-11-20 19:00 | verificación | Prueba real desde Telegram con el bot corriendo en Linux | — | Prueba manual del usuario | Satisfactoria, sin fallos fundamentales |
+| I6-002 | 2026-11-20 19:10 | proceso | Análisis de portabilidad y guía de transferencia entre Android/Termux | `docs/despliegue.md` | Revisión de contenido | OK |
+| I6-003 | 2026-11-20 19:15 | agregado | Script de empaquetado seguro para Termux | `scripts/empaquetar.sh` | `bash -n`; generación del `.tar.gz` | OK |
+| I6-004 | 2026-11-20 19:20 | verificación | Revisión del contenido del paquete | `dist/gastosBot-termux-YYYYMMDD-HHMM.tar.gz` | `tar -tzf` sin secretos, base, logs, venv ni fixtures | OK (72K) |
+| I6-005 | 2026-11-20 19:25 | cambio | README y `.gitignore` actualizados para transferencia | `README.md`, `.gitignore` | Revisión | OK |
+| I6-006 | — | pendiente | Instalar Termux, transferir, configurar `.env` y probar en el dispositivo | — | Checklist de `docs/despliegue.md` §14 | Pendiente |
+
+## Verificación ejecutada
+
+```text
+$ ./scripts/empaquetar.sh
+Paquete listo: /home/ale/Files/Proyectos/MYSOFT/gastosBot/dist/gastosBot-termux-YYYYMMDD-HHMM.tar.gz
+Tamaño: 72K
+
+$ tar -tzf dist/gastosBot-termux-*.tar.gz
+README.md
+Desarrollo/...
+# Sin .env, data/, logs/, .venv, __pycache__, .pytest_cache ni fixtures reales.
+
+$ .venv/bin/python -m pytest -q
+125 passed, 2 skipped in 5.01s
+
+$ bash -n scripts/*.sh
+bash -n OK
+```
+
+## Decisiones y observaciones
+
+- **Portabilidad:** el código no depende del modelo del teléfono. Cualquier Android con Termux (F-Droid/GitHub) y Python 3.11+ puede ejecutarlo. Solo cambian rutas del `.env` y la instalación de dependencias.
+- **Transferencia recomendada:** `git clone` del repositorio en Termux y llevar el `.env` por separado. La base es opcional y portable.
+- **Alternativa:** paquete `.tar.gz` generado por `scripts/empaquetar.sh`, sin secretos, base, logs, venv ni fixtures.
+- **No copiar `.venv`:** se recrea con `scripts/install_termux.sh`.
+- **Samsung:** requiere deshabilitar optimización de batería para Termux y, si hace falta, `termux-wake-lock`.
+- **Termux:** instalar desde F-Droid o GitHub, no desde Play Store.
+- **Base:** se puede migrar copiando `data/gastos.db` con el bot detenido, o empezar de cero.
+
+## Archivos entregados
+
+- `scripts/empaquetar.sh`.
+- `docs/despliegue.md` §14 (cambio de dispositivo y transferencia).
+- `README.md` y `.gitignore` actualizados.
+- Paquete local `dist/gastosBot-termux-YYYYMMDD-HHMM.tar.gz` (no versionado).
+
+## Mini informe de checkpoint C6
+
+- **Objetivo:** preparar y acompañar el despliegue en Termux y el cambio de dispositivo.
+- **Construido:** guía de transferencia, paquete seguro y checklist de instalación.
+- **Verificación:** paquete sin secretos ni datos; 125 pruebas aprobadas; scripts validados.
+- **Pendientes:** instalar en el dispositivo, transferir `.env`, migrar o crear la base, probar `/start` y un comprobante, configurar cron.
+- **Estado:** PENDIENTE DE PRUEBA EN DISPOSITIVO. El usuario debe ejecutar el despliegue y reportar el resultado.
 
 ---
 
@@ -530,4 +600,5 @@ No se ejecutó `start.sh` en esta instancia para no volver a usar el token en la
 | C2 | 2 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
 | C3 | 3 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua”; 96 pruebas con validación real |
 | C4 | 4 | 2026-11-20 | APROBADA | Aprobación implícita al pedir continuar; token aceptado en entorno personal |
-| C5 | 5 | 2026-11-20 | PENDIENTE DE OK | Scripts y guía de despliegue; 125 pruebas y `bash -n` OK |
+| C5 | 5 | 2026-11-20 | APROBADA | Prueba real desde Telegram satisfactoria; scripts y guía listos |
+| C6 | 6 | 2026-11-20 | PENDIENTE DE PRUEBA EN DISPOSITIVO | Paquete de transferencia y guía listos; falta instalar en el teléfono |
