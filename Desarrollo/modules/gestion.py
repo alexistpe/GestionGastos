@@ -14,6 +14,7 @@ from typing import Any, Mapping
 from database import db
 from modules import aviso as modulo_aviso
 from modules.resumen import Resumen, TipoResumen
+from modules.traductor import Traductor
 from utils import parsers
 from utils.parsers import ErrorParseo
 
@@ -23,8 +24,34 @@ class ErrorGestion(Exception):
 
 
 class Gestion:
-    def __init__(self, db_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | Path | None = None,
+        traductor: Traductor | None = None,
+    ) -> None:
         self.db_path = db_path
+        self._traductor = traductor
+
+    # ------------------------------------------------------------------ #
+    # Traducción de comprobantes
+    # ------------------------------------------------------------------ #
+
+    def conocer_traductor(self) -> Traductor:
+        if self._traductor is None:
+            self._traductor = Traductor()
+        return self._traductor
+
+    async def iniciar_traduccion(
+        self,
+        contenido: bytes,
+        mime_type: str,
+        contexto: str | None = None,
+    ) -> dict[str, Any]:
+        traductor = self.conocer_traductor()
+        extraido = await traductor.traducir_comprobante(
+            contenido, mime_type, contexto
+        )
+        return extraido.a_dict()
 
     # ------------------------------------------------------------------ #
     # Normalización

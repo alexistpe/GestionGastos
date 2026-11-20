@@ -5,7 +5,7 @@
 - **Rama:** `main`
 - **Código:** `Desarrollo/`
 - **Inicio:** 2026-11-20
-- **Estado general:** Instancia 2 completada; pendiente de aprobación (C2)
+- **Estado general:** Instancia 3 completada; pendiente de aprobación (C3)
 
 Este documento es la bitácora general del proyecto. Registra cada cambio, decisión, conflicto y proceso relevante. Se organiza por **instancias** y cada instancia cierra con un **checkpoint** que requiere aprobación explícita antes de continuar.
 
@@ -29,8 +29,8 @@ Este documento es la bitácora general del proyecto. Registra cada cambio, decis
 |---|---|---|---|
 | 0 | Planificación y arquitectura | C0 | APROBADA |
 | 1 | Núcleo de datos: schema, acceso y parsers | C1 | APROBADA |
-| 2 | Motor de negocio: resumen, avisos y gestión | C2 | PENDIENTE DE OK |
-| 3 | Extracción con Gemini | C3 | PENDIENTE |
+| 2 | Motor de negocio: resumen, avisos y gestión | C2 | APROBADA |
+| 3 | Extracción con Gemini | C3 | PENDIENTE DE OK |
 | 4 | Interfaz Telegram completa | C4 | PENDIENTE |
 | 5 | Despliegue y operación | C5 | PENDIENTE |
 
@@ -80,6 +80,9 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | DEC-019 | Los gastos no esenciales excluyen la etiqueta `ahorro` | El ahorro es una transferencia entre cuentas, no consumo; se analiza en su propia sección |
 | DEC-020 | El total gastado y la alerta de monto total incluyen todos los `EGRESO`, incluido `ahorro` | Coherencia con la definición de “gastos = registros con `-`”; el ahorro se informa aparte |
 | DEC-021 | El pendiente de rutina se calcula solo para etiquetas con presupuesto (alerta `ETIQUETA`) | No existe un presupuesto por etiqueta en el schema; sin alerta se informa “sin presupuesto definido” |
+| DEC-022 | Gemini devuelve JSON con `fecha`, `destino`, `monto`, `balance` y `moneda`; Python valida y normaliza | Evita confiar ciegamente en el modelo y permite completar datos faltantes en la confirmación |
+| DEC-023 | Timeout de 15 s con un reintento y errores en español | Cumple el SPEC y evita esperas indefinidas en el teléfono |
+| DEC-024 | La prueba real con Gemini es un test de integración opcional que requiere `GEMINI_API_KEY` y un comprobante | No se fuerzan credenciales ni se envían datos personales sin autorización |
 
 ---
 
@@ -91,6 +94,7 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | CONF-002 | 2026-11-20 | El SPEC no define deduplicación de alertas y, evaluando en cada INSERT, la misma alerta se repetiría | Medio | Se agrega `avisos_disparados` (DEC-010) | Resuelto |
 | CONF-003 | 2026-11-20 | El SPEC solo permitía editar antes de confirmar; el usuario necesita corregir comprobantes ya guardados | Medio | Se agrega flujo de edición y borrado (DEC-008, DEC-009) | Resuelto |
 | CONF-004 | 2026-11-20 | `pytest-asyncio` emitió una advertencia por el alcance del event loop | Bajo | Se agregó `pytest.ini` con `asyncio_default_fixture_loop_scope = function` | Resuelto |
+| CONF-005 | 2026-11-20 | El entorno no tiene `GEMINI_API_KEY` ni un comprobante de prueba disponible | Medio | Se implementó un test de integración opcional que se saltea sin credenciales; la validación real queda pendiente de que el usuario provea la clave y un comprobante | Pendiente |
 
 ---
 
@@ -266,10 +270,75 @@ Cobertura funcional verificada:
 
 ---
 
+# Instancia 3 — Extracción con Gemini
+
+## Objetivo y alcance
+
+Implementar la extracción automática de datos de comprobantes (imagen o PDF) con `google-genai`, incluyendo validación, normalización, timeout, reintento e integración con `Gestion`.
+
+## Bitácora
+
+| ID | Fecha/hora | Tipo | Descripción | Archivos | Verificación | Resultado |
+|---|---|---|---|---|---|---|
+| I3-001 | 2026-11-20 15:50 | proceso | Instalación de `google-genai` y `python-dotenv` en el venv local | `.venv/` (no versionado) | `google-genai 3.6.1` importado | OK |
+| I3-002 | 2026-11-20 15:55 | agregado | Wrapper de Gemini con esquema JSON, validación, timeout y reintento | `modules/traductor.py` | `pytest tests/test_traductor.py` | OK (15 pruebas) |
+| I3-003 | 2026-11-20 15:58 | agregado | Integración de traducción en el orquestador | `modules/gestion.py` | `pytest tests/test_gestion.py` | OK |
+| I3-004 | 2026-11-20 16:00 | agregado | Test de integración real opcional, protegido por credenciales y archivo | `tests/test_traductor_integracion.py` | `pytest -q` | 1 prueba omitida por falta de credenciales |
+| I3-005 | 2026-11-20 16:02 | verificación | Suite completa y compilación | `modules/`, `tests/` | `pytest -q` y `compileall` | 92 aprobadas, 1 omitida; `compileall OK` |
+| I3-006 | 2026-11-20 16:05 | agregado | Registro de modelo, MIME y resultado en el logger del traductor | `modules/traductor.py` | `pytest tests/test_traductor.py` | OK |
+
+## Verificación ejecutada
+
+```text
+$ .venv/bin/python -m pytest -q
+........................................................................ [ 77%]
+....................s                                                    [100%]
+92 passed, 1 skipped in 0.78s
+
+$ .venv/bin/python -m compileall -q . -x '/\.venv/'
+compileall OK
+```
+
+Cobertura funcional verificada:
+
+- Construcción del request a Gemini con modelo configurable, `response_mime_type="application/json"` y `response_schema`.
+- Envío del archivo como `Part.from_bytes` con MIME validado (`jpeg`, `png`, `webp`, `pdf`).
+- Parseo de JSON, incluyendo respuestas con cercas de código.
+- Normalización de fecha, monto, balance y moneda.
+- Detección de campos faltantes con advertencias para la confirmación.
+- Reintento ante timeout y error definitivo con mensaje en español.
+- Propagación de errores de configuración (falta de API key).
+- Integración `Gestion.iniciar_traduccion()` con inyección de un traductor falso.
+
+## Conflictos y observaciones
+
+- **CONF-005:** no hay `GEMINI_API_KEY` ni un comprobante de prueba en el entorno. La prueba real no se ejecutó; queda un test de integración opcional que se activa al definir `GEMINI_API_KEY` y `TEST_RECEIPT_PATH` (o colocar el archivo en `tests/fixtures/comprobante.pdf`).
+- No se enviaron datos personales a Gemini durante la verificación.
+- El módulo registra modelo, MIME y resultado en el logger; la configuración de handlers y rotación queda para la Instancia 4.
+
+## Archivos entregados
+
+- `modules/traductor.py`.
+- `modules/gestion.py` (integración de traducción).
+- `tests/test_traductor.py`.
+- `tests/test_traductor_integracion.py` (opcional, omitido sin credenciales).
+
+## Mini informe de checkpoint C3
+
+- **Objetivo:** dejar lista la extracción automática de comprobantes con Gemini, testeada sin depender de la red.
+- **Construido:** wrapper de Gemini, esquema de salida, validación/normalización, timeout con reintento, integración con `Gestion` y 15 pruebas nuevas.
+- **Verificación:** `pytest -q` → 92 aprobadas, 1 omitida; `compileall` → OK.
+- **Conflictos:** CONF-005 (sin credenciales ni comprobante real); la prueba real queda pendiente.
+- **Pendientes/riesgos:** validar contra la API real cuando el usuario provea la clave y un comprobante; confirmar disponibilidad del modelo configurado.
+- **Estado:** PENDIENTE DE APROBACIÓN. No se avanza a la Instancia 4 hasta recibir el OK del usuario.
+
+---
+
 ## Historial de checkpoints
 
 | Checkpoint | Instancia | Fecha | Estado | Observaciones |
 |---|---|---|---|---|
 | C0 | 0 | 2026-11-20 | APROBADA | Aprobación explícita del usuario con condiciones incorporadas |
 | C1 | 1 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
-| C2 | 2 | 2026-11-20 | PENDIENTE DE OK | 77 pruebas aprobadas; motor de negocio completo |
+| C2 | 2 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua” |
+| C3 | 3 | 2026-11-20 | PENDIENTE DE OK | 92 pruebas aprobadas, 1 omitida; prueba real pendiente de credenciales |

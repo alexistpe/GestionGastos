@@ -91,10 +91,11 @@ El DDL completo está en `database/schema.sql`.
 
 ### 5.2 Entrada
 
-- Imágenes: `image/jpeg`, `image/png`, etc.
+- Imágenes: `image/jpeg`, `image/png`, `image/webp`.
 - PDF: `application/pdf`.
 - Se descarga el archivo desde Telegram y se envía como `Part.from_bytes`.
 - El prompt pide devolver únicamente JSON con el esquema acordado.
+- Se puede pasar el texto del caption como contexto para ayudar a interpretar el destino y el balance.
 
 ### 5.3 Salida
 
@@ -113,13 +114,21 @@ El DDL completo está en `database/schema.sql`.
 - Se usa `response_mime_type="application/json"` y un `response_schema` para reducir texto libre.
 - `temperature=0`.
 
-### 5.4 Resiliencia
+### 5.4 Resiliencia y validación
 
 - `asyncio.wait_for` con timeout de 15 segundos.
 - Un reintento ante timeout.
 - Si falla definitivamente, se informa al usuario y se ofrece el alta manual.
-- Se registra cada llamada (fecha, modelo, resultado) para controlar el límite mensual.
+- El JSON se valida en Python: fecha ISO, monto positivo, balance `INGRESO`/`EGRESO` y moneda (ARS por defecto).
+- Los campos faltantes o inválidos se devuelven como `None` con una advertencia, para que la confirmación los complete.
+- El módulo registra modelo, MIME y resultado en el logger; la configuración de handlers y rotación se hará en la capa de bot (Instancia 4).
 - No se implementa caché por hash en la v1; queda como mejora futura.
+
+### 5.5 Prueba de integración
+
+- La lógica se prueba con un cliente falso, sin red.
+- Existe un test opcional que llama a Gemini real si están definidos `GEMINI_API_KEY` y `TEST_RECEIPT_PATH`, o si existe `tests/fixtures/comprobante.pdf`.
+- Sin credenciales, el test se omite; no se envían datos personales sin autorización.
 
 ---
 
