@@ -1,2 +1,5 @@
 .env
 *.env
+
+# Copias .txt de los diagramas: los modelos reales son los .puml
+Diseño/*.txt
