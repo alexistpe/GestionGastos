@@ -1,0 +1,22 @@
+# Entorno y secretos
+.env
+*.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Datos y logs locales
+data/
+logs/
+*.db
+*.db-wal
+*.db-shm
+
+# Sistema
+.DS_Store
