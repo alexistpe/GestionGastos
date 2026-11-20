@@ -1,0 +1,135 @@
+/'
+Aqui se extendera el diagrama de clases en UML de la arquitectura del
+sistema de gastos con el moto G7.
+
+Durante este proceso se identifican las siguientes clases:
+- Comprobante: fecha, destino, etiqueta, monto, balance
+- Etiqueta: nombre
+- Resumen: montoNeto, montoIngresado, montoSaliente, montoAhorro, montoGastadoRutina, montoPedienteRutina, montos: Comprobante
+- Aviso: nombre, tipo, etiqueta, montoLimite, mes
+- Tipo: nombre, descripcion
+'/
+
+@startuml
+'La clase gestion es la clase orquestadora, y responsable de la generacion.
+class Gestion{
+    comprobantes : Comprobante
+    etiquetas : Etiqueta
+    resumenes : Resumen
+    avios : Aviso
+    traductor : Traductor
+
+    iniciarTraduccion()
+    corregirComprobante()
+    generarResumen()
+    generarAviso()
+    conocerComprobante()
+    conocerEtiqueta()
+    conocerRsumen()
+    conocerAviso()
+    conocerTraductor()
+}
+
+class Comprobante{
+    nroComprobante
+    fecha
+    destino
+    etiqueta : Etiqueta
+    monto
+    balance : Balance
+
+    crear()
+    mostrar()
+    conocerEtiqueta()
+    conocerBalance()
+}
+
+'El balance simboliza si fue un ingreso o egreso.
+enum Balance{
+    nombre
+    descripcion
+}
+
+'El atributo esRutina simboliza un boleano que permite determinar si esa categoria pertenece a la rutina o no.
+class Etiqueta{
+    nro
+    nombre
+    esRutina
+
+    crear()
+    mostrar()
+}
+
+'Al ser una clase procesadora, unicamente contiene metodos.
+class Traductor{
+
+    crear()
+    mostrar()
+    traducirComprobante()
+    conocerComprobante()
+}
+
+class Resumen{
+    tipoResumen : TipoResumen
+    montoNeto
+    montoIngresado
+    montoSaliente
+    montoAhorro
+    montoGastadoRutina
+    montoPedienteRutina
+    montos: Comprobante
+
+    crear()
+    mostrar()
+    calcularMontoNeto()
+    calcularAhorro()
+    calcularGastoRutina()
+    calcularMontoPedienteRutina()
+    conocerTipoResumen()
+    conocerComprobante()
+}
+
+'Permite definir el tipo de resumen a pedir, si mensual, o rango de fechas.
+enum TipoResumen{
+    nombre
+    descripcion
+}
+
+'Aviso tiene ciclo de vida distinto a Resumen, usa metodos independientes.
+class Aviso{
+    nombre
+    tipo : Tipo
+    etiqueta : Etiqueta
+    montoLimite
+    mes
+
+    crear()
+    mostrar()
+    conocerTipo()
+    conocerEtiqueta()
+    añadirAviso()
+    evaluarAviso()
+}
+enum Tipo{
+    nombre
+    descripcion
+}
+
+'Relaciones:
+Comprobante -> "1" Etiqueta
+Comprobante -> "1" Balance
+Traductor -> "1" Comprobante
+Resumen -> "1..*" Comprobante
+Resumen -> "1" TipoResumen
+Aviso -> "1..*" Comprobante
+Aviso -> "1" Tipo
+Gestion -> Comprobante
+Gestion -> Aviso
+Gestion -> Resumen
+Gestion -> Traductor
+Gestion -> Etiqueta
+
+/'Regla de negocios:
+- Una etiqueta por comprobante, se aftrae los subtotales.
+'/
+@enduml

@@ -1,0 +1,27 @@
+'Diagrama de maquina de estados para gastos.
+'FB: Flujo basico; FA: Flujo alternativo.
+@startuml
+state "Comprobante Recibido" as CR
+state "Consultando Servicio" as CS
+state "Esperando Confirmacion" as EC
+state "Envio seleccion etiqueta" as ESE
+state "Corrigiendo monto/etiqueta" as CME
+state "Registrando Transaccion" as RT
+state "Alertando" as A
+state "Confirmado" as C
+
+[*] --> CR: 1. Registrar Comprobante
+CR --> CS: 1. Registrar Comprobante (FB, Se confirmo que es una imagen)
+CS --> EC: 1. Registrar Comprobante (FA, Se especifico la etiqueta)
+CS --> ESE: 1. Registrar Comprobante (FB, sin especificar etiqueta)
+ESE --> EC: 1. Registrar Comprobante (FB, El usuario selecciono la etiqueta)
+
+EC --> CME: 1. Registrar Comprobante (FA, Paso 6 FB)
+CME --> EC: 1. Registrar Comprobante (FA, Alertnativa 7)
+EC --> C: 1. Registrar Comprobante (Comprobante confirmado)
+C --> RT: 1. Registrar Comprobante (Fin del FB)
+C --> A: 2. Emitir Alerta (FA, Alternativo 10)
+
+RT --> [*]
+A --> [*]
+@enduml
