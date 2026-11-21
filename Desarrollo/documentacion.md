@@ -5,7 +5,7 @@
 - **Rama:** `main`
 - **Código:** `Desarrollo/`
 - **Inicio:** 2026-11-20
-- **Estado general:** Instancia 6 en curso; pendiente de prueba en el dispositivo (C6)
+- **Estado general:** Instancia 6 en curso; REST/httpx listo, pendiente de reinstalar y probar en el dispositivo (C6)
 
 Este documento es la bitácora general del proyecto. Registra cada cambio, decisión, conflicto y proceso relevante. Se organiza por **instancias** y cada instancia cierra con un **checkpoint** que requiere aprobación explícita antes de continuar.
 
@@ -98,6 +98,9 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | DEC-036 | El proyecto es portable entre dispositivos Android con Termux; solo cambian rutas y dependencias del entorno | No hay código específico del Moto G7 |
 | DEC-037 | Transferencia recomendada por `git clone`; alternativa `scripts/empaquetar.sh` con `.tar.gz` sin secretos, base, venv ni fixtures | Evita copiar archivos innecesarios o sensibles |
 | DEC-038 | No copiar `.venv` entre dispositivos; recrearlo con `scripts/install_termux.sh` | Los entornos virtuales no son portables entre Linux y Android |
+| DEC-039 | Reemplazar `google-genai` por la API REST de Gemini con `httpx` | Evita `pydantic-core`, `google-auth` y `cryptography`, que no tienen wheels Android y rompen la instalación en Termux |
+| DEC-040 | `GEMINI_API_VERSION` configurable, por defecto `v1beta` | Permite ajustar la versión del endpoint sin tocar código |
+| DEC-041 | La API key de Gemini viaja en el header `x-goog-api-key` | Evita exponerla en la URL o en logs de `httpx` |
 
 ---
 
@@ -123,6 +126,8 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | CONF-016 | 2026-11-20 | La versión de Termux de Play Store está desactualizada y rompe paquetes | Medio | La guía recomienda instalar Termux desde F-Droid o GitHub | Resuelto |
 | CONF-017 | 2026-11-20 | El `.venv` de Linux no es portable a Android | Medio | Se excluye de la transferencia y se recrea con `install_termux.sh` (DEC-038) | Resuelto |
 | CONF-018 | 2026-11-20 | El `.env` original tiene una ruta absoluta de Termux que puede no coincidir con el nuevo clon | Bajo | La guía indica usar `DB_PATH=./data/gastos.db` o ajustar la ruta | Resuelto |
+| CONF-019 | 2026-11-20 | `pydantic-core` no tiene wheel para Android; pip intenta compilarlo con maturin/rustup y falla en Termux | Alto | Se reemplazó `google-genai` por REST/`httpx`; desaparecen pydantic, google-auth y cryptography (DEC-039) | Resuelto |
+| CONF-020 | 2026-11-20 | `cryptography` tampoco tenía wheel Android y se resolvió con `python-cryptography` del sistema | Medio | Con REST/`httpx` ya no se necesita; la instalación queda en Python puro | Resuelto |
 
 ---
 
@@ -543,7 +548,12 @@ Preparar el traslado del proyecto a Termux, responder dudas de portabilidad entr
 | I6-003 | 2026-11-20 19:15 | agregado | Script de empaquetado seguro para Termux | `scripts/empaquetar.sh` | `bash -n`; generación del `.tar.gz` | OK |
 | I6-004 | 2026-11-20 19:20 | verificación | Revisión del contenido del paquete | `dist/gastosBot-termux-YYYYMMDD-HHMM.tar.gz` | `tar -tzf` sin secretos, base, logs, venv ni fixtures | OK (72K) |
 | I6-005 | 2026-11-20 19:25 | cambio | README y `.gitignore` actualizados para transferencia | `README.md`, `.gitignore` | Revisión | OK |
-| I6-006 | — | pendiente | Instalar Termux, transferir, configurar `.env` y probar en el dispositivo | — | Checklist de `docs/despliegue.md` §14 | Pendiente |
+| I6-006 | 2026-11-20 20:05 | conflicto | En Termux, `cryptography` se resolvió con `python-cryptography`, pero `pydantic-core` falló al compilar con maturin/rustup | — | Salida de `pip install` | CONF-019 |
+| I6-007 | 2026-11-20 20:15 | decisión | Migrar de `google-genai` a la API REST de Gemini con `httpx` | `modules/traductor.py`, `requirements.txt`, `config.py` | Revisión de diseño | OK |
+| I6-008 | 2026-11-20 20:25 | agregado | Cliente REST con `httpx`, esquema JSON, base64, manejo de errores y reintentos | `modules/traductor.py` | `pytest tests/test_traductor.py` | 19 pruebas |
+| I6-009 | 2026-11-20 20:35 | cambio | Tests adaptados a `httpx.MockTransport` y dependencias actualizadas | `tests/test_traductor.py`, `requirements.txt`, `.env.example` | `pytest -q` | 127 aprobadas, 2 omitidas |
+| I6-010 | 2026-11-20 20:45 | verificación | Validación real con 2 comprobantes y venv limpio sin `google-genai` | `tests/test_traductor_integracion.py` | API real + venv limpio | 2 reales OK; 127 mock OK |
+| I6-011 | — | pendiente | Reinstalar en Termux con las nuevas dependencias y probar en el dispositivo | — | Checklist de `docs/despliegue.md` §14 | Pendiente |
 
 ## Verificación ejecutada
 
@@ -558,7 +568,16 @@ Desarrollo/...
 # Sin .env, data/, logs/, .venv, __pycache__, .pytest_cache ni fixtures reales.
 
 $ .venv/bin/python -m pytest -q
-125 passed, 2 skipped in 5.01s
+127 passed, 2 skipped in 4.73s
+
+$ RUN_GEMINI_INTEGRATION=1 .venv/bin/python -m pytest -q tests/test_traductor_integracion.py
+2 passed in 5.29s
+
+# Venv limpio solo con requirements-dev.txt:
+$ /tmp/opencode/gastos-clean-venv/bin/python -m pytest -q
+127 passed, 2 skipped
+$ RUN_GEMINI_INTEGRATION=1 /tmp/opencode/gastos-clean-venv/bin/python -m pytest -q tests/test_traductor_integracion.py
+2 passed
 
 $ bash -n scripts/*.sh
 bash -n OK
@@ -573,21 +592,27 @@ bash -n OK
 - **Samsung:** requiere deshabilitar optimización de batería para Termux y, si hace falta, `termux-wake-lock`.
 - **Termux:** instalar desde F-Droid o GitHub, no desde Play Store.
 - **Base:** se puede migrar copiando `data/gastos.db` con el bot detenido, o empezar de cero.
+- **Transporte Gemini:** se migró a REST/`httpx` (DEC-039). Desaparecen `pydantic-core`, `google-auth` y `cryptography`; la instalación en Termux queda en Python puro.
+- **API key:** viaja en el header `x-goog-api-key`, no en la URL.
+- **Versión y modelo:** `GEMINI_API_VERSION` y `GEMINI_MODEL` configurables por `.env`.
 
 ## Archivos entregados
 
 - `scripts/empaquetar.sh`.
 - `docs/despliegue.md` §14 (cambio de dispositivo y transferencia).
 - `README.md` y `.gitignore` actualizados.
+- `modules/traductor.py` con REST/`httpx`.
+- `requirements.txt` sin `google-genai`.
+- `tests/test_traductor.py` con `httpx.MockTransport`.
 - Paquete local `dist/gastosBot-termux-YYYYMMDD-HHMM.tar.gz` (no versionado).
 
 ## Mini informe de checkpoint C6
 
 - **Objetivo:** preparar y acompañar el despliegue en Termux y el cambio de dispositivo.
-- **Construido:** guía de transferencia, paquete seguro y checklist de instalación.
-- **Verificación:** paquete sin secretos ni datos; 125 pruebas aprobadas; scripts validados.
-- **Pendientes:** instalar en el dispositivo, transferir `.env`, migrar o crear la base, probar `/start` y un comprobante, configurar cron.
-- **Estado:** PENDIENTE DE PRUEBA EN DISPOSITIVO. El usuario debe ejecutar el despliegue y reportar el resultado.
+- **Construido:** guía de transferencia, paquete seguro, checklist de instalación y migración a REST/`httpx`.
+- **Verificación:** 127 pruebas mock + 2 reales; venv limpio sin `google-genai`; paquete sin secretos ni datos; scripts validados.
+- **Pendientes:** reinstalar en el dispositivo con el nuevo `requirements.txt`, transferir `.env`, migrar o crear la base, probar `/start` y un comprobante, configurar cron.
+- **Estado:** PENDIENTE DE PRUEBA EN DISPOSITIVO. El usuario debe ejecutar el despliegue con las nuevas dependencias y reportar el resultado.
 
 ---
 
@@ -601,4 +626,4 @@ bash -n OK
 | C3 | 3 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua”; 96 pruebas con validación real |
 | C4 | 4 | 2026-11-20 | APROBADA | Aprobación implícita al pedir continuar; token aceptado en entorno personal |
 | C5 | 5 | 2026-11-20 | APROBADA | Prueba real desde Telegram satisfactoria; scripts y guía listos |
-| C6 | 6 | 2026-11-20 | PENDIENTE DE PRUEBA EN DISPOSITIVO | Paquete de transferencia y guía listos; falta instalar en el teléfono |
+| C6 | 6 | 2026-11-20 | PENDIENTE DE PRUEBA EN DISPOSITIVO | REST/httpx validado en Linux y venv limpio; falta reinstalar y probar en el teléfono |

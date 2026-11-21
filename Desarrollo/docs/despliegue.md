@@ -110,6 +110,7 @@ TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
 GEMINI_API_KEY=...
 GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_API_VERSION=v1beta
 
 DATA_DIR=./data
 LOG_DIR=./logs
@@ -288,12 +289,9 @@ Sí. El proyecto no depende del modelo ni del hardware: solo necesita Termux, Py
 - **Rutas:** usá `DB_PATH=./data/gastos.db` (relativo a `Desarrollo/`) o ajustá la ruta absoluta al nuevo dispositivo.
 - **Batería:** Samsung y otros fabricantes suelen ser agresivos con el segundo plano. Deshabilitá la optimización de batería para Termux, permití actividad en segundo plano y usá `termux-wake-lock` si hace falta.
 - **Cron:** la ruta `crontab` debe apuntar al lugar donde clonaste el repo. Si usás `~/gastos`, la línea de ejemplo sigue siendo válida.
-- **Dependencias:** si `pip` intenta compilar `pydantic-core`, instalá las herramientas de compilación y reintentá:
-  ```bash
-  pkg install -y rust binutils
-  .venv/bin/pip install -r requirements.txt
-  ```
-  En la mayoría de los Termux recientes hay wheels disponibles y no hace falta compilar.
+- **Dependencias:** desde la migración a REST/`httpx`, el proyecto no necesita compilar `pydantic-core`, `google-auth` ni `cryptography`. `pip install -r requirements.txt` instala solo PTB, `httpx` y `python-dotenv`, todos compatibles con Termux.
+  - No hace falta `pkg install rust binutils` ni crear el venv con `--system-site-packages`.
+  - Si ya tenías un `.venv` viejo, eliminalo y recrealo limpio.
 
 ### Qué llevar al Termux
 

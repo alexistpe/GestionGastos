@@ -1,17 +1,21 @@
-"""Traducción de comprobantes (imagen/PDF) a datos estructurados con Gemini.
+"""Traducción de comprobantes (imagen/PDF) a datos estructurados.
 
-La dependencia ``google-genai`` se importa de forma diferida para que el resto
-del proyecto pueda usarse sin ella (por ejemplo, en tests de la capa de datos).
+Usa directamente la API REST de Gemini mediante ``httpx``. Esto evita las
+dependencias nativas de ``google-genai`` (pydantic-core, google-auth,
+cryptography) que no tienen wheels para Android/Termux.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
+
+import httpx
 
 import config
 from utils import parsers
@@ -37,33 +41,26 @@ INSTRUCCION_SISTEMA = (
     "Respondés únicamente con JSON válido, sin explicaciones."
 )
 
-def _es_error_transitorio(exc: Exception) -> bool:
-    codigo = getattr(exc, "code", None)
-    if codigo is None:
-        codigo = getattr(exc, "status_code", None)
-    return codigo in {429, 500, 502, 503, 504}
-
-
 ESQUEMA_RESPUESTA: dict[str, Any] = {
-    "type": "object",
+    "type": "OBJECT",
     "properties": {
         "fecha": {
-            "type": "string",
+            "type": "STRING",
             "nullable": True,
             "description": "Fecha de la operación en formato YYYY-MM-DD.",
         },
         "destino": {
-            "type": "string",
+            "type": "STRING",
             "nullable": True,
             "description": "Comercio, persona o descripción breve de la operación.",
         },
         "monto": {
-            "type": "number",
+            "type": "NUMBER",
             "nullable": True,
             "description": "Monto total de la operación, siempre positivo.",
         },
         "balance": {
-            "type": "string",
+            "type": "STRING",
             "enum": ["INGRESO", "EGRESO"],
             "nullable": True,
             "description": (
@@ -72,13 +69,26 @@ ESQUEMA_RESPUESTA: dict[str, Any] = {
             ),
         },
         "moneda": {
-            "type": "string",
+            "type": "STRING",
             "nullable": True,
             "description": "Código ISO de la moneda, por ejemplo ARS.",
         },
     },
     "required": ["fecha", "destino", "monto", "balance", "moneda"],
 }
+
+
+def _es_error_transitorio(exc: Exception) -> bool:
+    if isinstance(exc, httpx.TransportError):
+        return True
+
+    codigo = getattr(exc, "code", None)
+    if codigo is None:
+        codigo = getattr(exc, "status_code", None)
+    if codigo is None:
+        respuesta = getattr(exc, "response", None)
+        codigo = getattr(respuesta, "status_code", None)
+    return codigo in {429, 500, 502, 503, 504}
 
 
 @dataclass
@@ -102,39 +112,32 @@ class ComprobanteExtraido:
 
 
 class Traductor:
-    """Wrapper de Gemini para convertir un comprobante en datos contables."""
+    """Cliente REST de Gemini para convertir un comprobante en datos."""
 
     def __init__(
         self,
         api_key: str | None = None,
         modelo: str | None = None,
-        cliente: Any | None = None,
+        cliente_http: httpx.AsyncClient | None = None,
         timeout: float = 15.0,
     ) -> None:
         self.api_key = config.GEMINI_API_KEY if api_key is None else api_key
         self.modelo = modelo or config.GEMINI_MODEL
-        self._cliente = cliente
+        self._cliente_http = cliente_http
         self.timeout = timeout
 
-    def _obtener_cliente(self) -> Any:
-        if self._cliente is not None:
-            return self._cliente
+    def _url_gemini(self) -> str:
+        version = (getattr(config, "GEMINI_API_VERSION", "") or "v1beta").strip()
+        modelo = self.modelo.removeprefix("models/")
+        return (
+            "https://generativelanguage.googleapis.com/"
+            f"{version}/models/{modelo}:generateContent"
+        )
 
-        if not self.api_key:
-            raise ErrorTraduccion(
-                "Falta GEMINI_API_KEY. Configurala en el archivo .env."
-            )
-
-        try:
-            from google import genai
-        except ImportError as exc:
-            raise ErrorTraduccion(
-                "Falta la dependencia google-genai. "
-                "Instalala con: pip install google-genai"
-            ) from exc
-
-        self._cliente = genai.Client(api_key=self.api_key)
-        return self._cliente
+    def _obtener_cliente_http(self) -> tuple[httpx.AsyncClient, bool]:
+        if self._cliente_http is not None:
+            return self._cliente_http, False
+        return httpx.AsyncClient(timeout=self.timeout), True
 
     def _construir_prompt(self, contexto: str | None = None) -> str:
         prompt = (
@@ -156,30 +159,92 @@ class Traductor:
             )
         return prompt
 
+    def _construir_payload(
+        self, prompt: str, contenido: bytes, mime_type: str
+    ) -> dict[str, Any]:
+        datos_base64 = base64.b64encode(contenido).decode("ascii")
+        return {
+            "systemInstruction": {"parts": [{"text": INSTRUCCION_SISTEMA}]},
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": datos_base64,
+                            }
+                        },
+                        {"text": prompt},
+                    ],
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0,
+                "responseMimeType": "application/json",
+                "responseSchema": ESQUEMA_RESPUESTA,
+            },
+        }
+
     async def _llamar_api(
         self, prompt: str, contenido: bytes, mime_type: str
     ) -> str:
-        from google.genai import types
+        if not self.api_key:
+            raise ErrorTraduccion(
+                "Falta GEMINI_API_KEY. Configurala en el archivo .env."
+            )
 
-        cliente = self._obtener_cliente()
-        configuracion = types.GenerateContentConfig(
-            temperature=0,
-            response_mime_type="application/json",
-            response_schema=ESQUEMA_RESPUESTA,
-            system_instruction=INSTRUCCION_SISTEMA,
-        )
-        respuesta = await cliente.aio.models.generate_content(
-            model=self.modelo,
-            contents=[
-                types.Part.from_bytes(data=contenido, mime_type=mime_type),
-                prompt,
-            ],
-            config=configuracion,
-        )
-        texto = getattr(respuesta, "text", None)
-        if not texto or not str(texto).strip():
+        payload = self._construir_payload(prompt, contenido, mime_type)
+        headers = {
+            "x-goog-api-key": self.api_key,
+            "Content-Type": "application/json",
+        }
+
+        cliente, propio = self._obtener_cliente_http()
+        try:
+            respuesta = await cliente.post(
+                self._url_gemini(), headers=headers, json=payload
+            )
+        finally:
+            if propio:
+                await cliente.aclose()
+
+        if respuesta.status_code >= 400:
+            logger.warning(
+                "Gemini HTTP %s: %s",
+                respuesta.status_code,
+                respuesta.text[:500],
+            )
+        respuesta.raise_for_status()
+
+        try:
+            datos = respuesta.json()
+        except ValueError as exc:
+            raise ErrorTraduccion(
+                "El servicio devolvió una respuesta inválida. "
+                "Reintentá o ingresá el comprobante manualmente."
+            ) from exc
+
+        bloqueo = (datos.get("promptFeedback") or {}).get("blockReason")
+        if bloqueo:
+            raise ErrorTraduccion(
+                f"El servicio bloqueó la solicitud ({bloqueo}). "
+                "Probá con otro comprobante."
+            )
+
+        candidatos = datos.get("candidates") or []
+        if not candidatos:
             raise ErrorTraduccion("La respuesta del servicio vino vacía.")
-        return str(texto)
+
+        partes = (
+            (candidatos[0].get("content") or {}).get("parts") or []
+        )
+        for parte in partes:
+            texto = parte.get("text")
+            if texto and str(texto).strip():
+                return str(texto)
+
+        raise ErrorTraduccion("La respuesta del servicio vino vacía.")
 
     async def _llamar_con_reintento(
         self, prompt: str, contenido: bytes, mime_type: str
@@ -190,7 +255,7 @@ class Traductor:
                     self._llamar_api(prompt, contenido, mime_type),
                     timeout=self.timeout,
                 )
-            except asyncio.TimeoutError as exc:
+            except (asyncio.TimeoutError, httpx.TimeoutException) as exc:
                 logger.warning(
                     "Gemini timeout: modelo=%s intento=%d",
                     self.modelo,
@@ -208,9 +273,9 @@ class Traductor:
             except Exception as exc:
                 if _es_error_transitorio(exc) and intento == 0:
                     logger.warning(
-                        "Gemini transitorio: modelo=%s codigo=%s",
+                        "Gemini transitorio: modelo=%s tipo=%s",
                         self.modelo,
-                        getattr(exc, "code", getattr(exc, "status_code", None)),
+                        type(exc).__name__,
                     )
                     await asyncio.sleep(1.5)
                     continue

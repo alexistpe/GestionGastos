@@ -21,7 +21,7 @@ Documento técnico de referencia. Complementa el SPEC original y registra las de
 |---|---|
 | Lenguaje | Python 3.11+ |
 | Bot | `python-telegram-bot` v21 |
-| Extracción | `google-genai` con modelo configurable |
+| Extracción | Gemini REST vía `httpx`, modelo y versión configurables |
 | Base de datos | `sqlite3` (stdlib) |
 | Configuración | `.env` + `python-dotenv` |
 | Estado | memoria + `sesion_estado` |
@@ -87,11 +87,14 @@ El DDL completo está en `database/schema.sql`.
 
 ## 5. Extracción con Gemini
 
-### 5.1 SDK y modelo
+### 5.1 Cliente HTTP y modelo
 
-- SDK: `google-genai`.
+- Cliente: `httpx.AsyncClient` directamente contra la API REST de Gemini.
+- Endpoint: `https://generativelanguage.googleapis.com/{version}/models/{model}:generateContent`.
+- Versión: `GEMINI_API_VERSION`, por defecto `v1beta`.
 - Modelo: variable `GEMINI_MODEL`, por defecto `gemini-3.1-flash-lite`.
 - Se documenta que el nombre del modelo puede cambiar; no se hardcodea en la lógica.
+- **Motivo de la migración:** `google-genai` arrastra `pydantic-core`, `google-auth` y `cryptography`, que no tienen wheels Android y obligan a compilar en Termux. Con REST/`httpx` el despliegue queda en Python puro.
 - `gemini-2.5-flash` dejó de estar disponible para cuentas nuevas (CONF-006).
 - `gemini-3.8-flash` y `gemini-3.7-flash` respondieron 503 por alta demanda durante la validación (CONF-007); se eligió `gemini-3.1-flash-lite` por disponibilidad y funcionamiento comprobado con dos comprobantes reales. Se puede configurar un modelo más potente por entorno cuando esté disponible.
 
@@ -99,9 +102,10 @@ El DDL completo está en `database/schema.sql`.
 
 - Imágenes: `image/jpeg`, `image/png`, `image/webp`.
 - PDF: `application/pdf`.
-- Se descarga el archivo desde Telegram y se envía como `Part.from_bytes`.
+- Se descarga el archivo desde Telegram y se envía como `inlineData` con `mimeType` y `data` en base64.
 - El prompt pide devolver únicamente JSON con el esquema acordado.
 - Se puede pasar el texto del caption como contexto para ayudar a interpretar el destino y el balance.
+- La API key viaja en el header `x-goog-api-key`, nunca en la URL.
 
 ### 5.3 Salida
 
@@ -117,24 +121,27 @@ El DDL completo está en `database/schema.sql`.
 
 - `balance` se deduce del sentido de la operación.
 - Si no es concluyente, se devuelve `null` y la confirmación lo resuelve con botones.
-- Se usa `response_mime_type="application/json"` y un `response_schema` para reducir texto libre.
+- Se usa `generationConfig.responseMimeType="application/json"` y `responseSchema` para reducir texto libre.
 - `temperature=0`.
+- El texto útil se extrae de `candidates[0].content.parts[].text`.
+- Se contempla `promptFeedback.blockReason` y respuestas sin candidatos.
 
 ### 5.4 Resiliencia y validación
 
 - `asyncio.wait_for` con timeout de 15 segundos.
-- Un reintento ante timeout.
+- Un reintento ante timeout (`httpx.TimeoutException`) y errores transitorios (429/5xx o `httpx.TransportError`).
 - Si falla definitivamente, se informa al usuario y se ofrece el alta manual.
 - El JSON se valida en Python: fecha ISO, monto positivo, balance `INGRESO`/`EGRESO` y moneda (ARS por defecto).
 - Los campos faltantes o inválidos se devuelven como `None` con una advertencia, para que la confirmación los complete.
-- El módulo registra modelo, MIME y resultado en el logger; la configuración de handlers y rotación se hará en la capa de bot (Instancia 4).
+- El módulo registra modelo, MIME y resultado en el logger; la configuración de handlers y rotación queda en la capa de bot.
 - No se implementa caché por hash en la v1; queda como mejora futura.
 
 ### 5.5 Prueba de integración
 
-- La lógica se prueba con un cliente falso, sin red.
+- La lógica se prueba con `httpx.MockTransport`, sin red.
 - Existe un test que llama a Gemini real si se define `RUN_GEMINI_INTEGRATION=1`, hay `GEMINI_API_KEY` y hay comprobantes en `TEST_RECEIPT_PATH` o `tests/fixtures/`.
 - La validación real se ejecutó con dos comprobantes PNG y `gemini-3.1-flash-lite`; ambos devolvieron monto, fecha y balance.
+- También se validó en un venv limpio con solo `requirements-dev.txt`, sin `google-genai`, pydantic ni cryptography.
 - Por defecto el test se omite para no consumir la cuota mensual en cada corrida.
 - Los comprobantes reales y el `.env` están ignorados por `.gitignore`: no se versionan ni se exponen claves o datos financieros.
 

@@ -47,6 +47,7 @@ except ValueError:
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
+GEMINI_API_VERSION = os.getenv("GEMINI_API_VERSION", "v1beta").strip()
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
 ZONA_HORARIA = os.getenv("TZ", "America/Argentina/Buenos_Aires").strip()
 

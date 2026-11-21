@@ -35,7 +35,7 @@ El objetivo es tener un registro contable simple y consultable sin planillas man
 |---|---|
 | Lenguaje | Python 3.11+ |
 | Bot de Telegram | `python-telegram-bot` v21 (long polling) |
-| Extracción de comprobantes | Google Gemini (`google-genai`), modelo configurable |
+| Extracción de comprobantes | Google Gemini (REST API vía `httpx`), modelo configurable |
 | Base de datos | SQLite (stdlib `sqlite3`) |
 | Estado conversacional | Memoria + tabla `sesion_estado` (persistencia propia) |
 | Ejecución en Android | Termux + `nohup` |
@@ -216,11 +216,11 @@ El desarrollo se organiza en **instancias** con puntos de control. La bitácora 
 | 1 | Núcleo de datos: schema, acceso y parsers | Aprobada |
 | 2 | Motor de negocio: resumen, avisos y gestión | Aprobada |
 | 3 | Extracción con Gemini | Aprobada (validación real con 2 comprobantes) |
-| 4 | Interfaz Telegram completa | Aprobada (125 pruebas, arranque validado) |
+| 4 | Interfaz Telegram completa | Aprobada (arranque validado) |
 | 5 | Despliegue y operación | Aprobada (prueba real desde Telegram satisfactoria) |
-| 6 | Despliegue en dispositivo y transferencia | Pendiente de prueba en el teléfono |
+| 6 | Despliegue en dispositivo y transferencia | Pendiente de reinstalar y probar en el teléfono (REST/`httpx`) |
 
-El bot ya fue probado desde Telegram con el servidor en Linux. Queda el despliegue físico en Termux, para el cual están los scripts, el paquete `dist/gastosBot-termux-*.tar.gz` y la guía [`Desarrollo/docs/despliegue.md`](Desarrollo/docs/despliegue.md) §14.
+El bot ya fue probado desde Telegram con el servidor en Linux. La suite actual tiene **127 pruebas mock + 2 de integración real**, y se validó en un venv limpio sin `google-genai`. Queda el despliegue físico en Termux, para el cual están los scripts, el paquete `dist/gastosBot-termux-*.tar.gz` y la guía [`Desarrollo/docs/despliegue.md`](Desarrollo/docs/despliegue.md) §14.
 
 ## Documentación
 
