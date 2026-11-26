@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS avisos_disparados (
     PRIMARY KEY (clave, periodo)
 );
 
+CREATE TABLE IF NOT EXISTS configuracion (
+    clave TEXT PRIMARY KEY,
+    valor TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_comprobantes_fecha
     ON comprobantes(fecha);
 

@@ -48,7 +48,11 @@ def test_resumen_mensual_totales_y_ahorro(db_path):
     assert resumen.monto_ingresado == pytest.approx(870000)
     assert resumen.monto_saliente == pytest.approx(165000)
     assert resumen.monto_neto == pytest.approx(705000)
+    assert resumen.ahorro_inicial == 0
+    assert resumen.ahorro_depositado == pytest.approx(100000)
+    assert resumen.ahorro_extraido == pytest.approx(20000)
     assert resumen.monto_ahorro == pytest.approx(80000)
+    assert resumen.ahorro_acumulado == pytest.approx(80000)
 
     assert [(item["etiqueta"], item["monto"]) for item in resumen.gastos_por_etiqueta] == [
         ("ahorro", 100000),
@@ -84,6 +88,56 @@ def test_resumen_mensual_totales_y_ahorro(db_path):
     assert "Gastos no esenciales" in texto
     assert "$705.000,00" in texto
     assert "$80.000,00" in texto
+    assert "Saldo inicial" in texto
+    assert "Depositado" in texto
+    assert "Extraído" in texto
+    assert "Neto del período" in texto
+    assert "Saldo al cierre" in texto
+
+
+def test_ahorro_inicial_y_acumulado(db_path):
+    crear(db_path, "ahorro", 50000, "EGRESO", "2026-10-01")
+    crear(db_path, "cuota", 850000, "INGRESO", "2026-11-03")
+    crear(db_path, "ahorro", 100000, "EGRESO", "2026-11-15")
+    crear(db_path, "ahorro", 20000, "INGRESO", "2026-11-18")
+
+    gestion = Gestion(db_path)
+    gestion.configurar_saldo_inicial_ahorro(30000)
+
+    resumen = gestion.generar_resumen("MENSUAL", hoy=date(2026, 11, 20))
+
+    assert resumen.ahorro_inicial == pytest.approx(80000)
+    assert resumen.ahorro_depositado == pytest.approx(100000)
+    assert resumen.ahorro_extraido == pytest.approx(20000)
+    assert resumen.monto_ahorro == pytest.approx(80000)
+    assert resumen.ahorro_acumulado == pytest.approx(160000)
+
+    datos = resumen.a_dict()
+    assert datos["ahorro_inicial"] == pytest.approx(80000)
+    assert datos["ahorro_acumulado"] == pytest.approx(160000)
+
+    rango = gestion.generar_resumen(
+        "RANGO", desde="01.11.26", hasta="30.11.26"
+    )
+    assert rango.ahorro_inicial == pytest.approx(80000)
+    assert rango.ahorro_acumulado == pytest.approx(160000)
+
+
+def test_ahorro_neto_negativo_y_advertencia(db_path):
+    crear(db_path, "cuota", 850000, "INGRESO", "2026-11-03")
+    crear(db_path, "ahorro", 100000, "EGRESO", "2026-11-15")
+    crear(db_path, "ahorro", 150000, "INGRESO", "2026-11-18")
+
+    gestion = Gestion(db_path)
+    gestion.configurar_saldo_inicial_ahorro(50000)
+
+    resumen = gestion.generar_resumen("MENSUAL", hoy=date(2026, 11, 20))
+
+    assert resumen.monto_ahorro == pytest.approx(-50000)
+    assert resumen.ahorro_acumulado == 0
+    texto = resumen.a_texto_ahorro()
+    assert "balance de ahorro del período es negativo" in texto
+    assert "saldo acumulado de ahorro es negativo" not in texto
 
 
 def test_rutina_con_presupuestos(db_path):

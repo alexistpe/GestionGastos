@@ -159,6 +159,53 @@ def test_formatear_alerta():
     )
 
 
+def test_formatear_alerta_ahorro_y_id():
+    aviso = {
+        "id": 5,
+        "tipo": "ETIQUETA",
+        "etiqueta": "ahorro",
+        "monto_limite": 50000,
+        "activo": 1,
+    }
+    assert (
+        ui.formatear_alerta(aviso)
+        == "🏷️ ahorro (máx. extracciones): $50.000,00"
+    )
+    assert (
+        ui.formatear_alerta(aviso, incluir_id=True)
+        == "#5 · 🏷️ ahorro (máx. extracciones): $50.000,00"
+    )
+
+
+def test_teclados_alertas():
+    avisos = [
+        {
+            "id": 1,
+            "tipo": "ETIQUETA",
+            "etiqueta": "nafta",
+            "monto_limite": 15000,
+            "activo": 1,
+        },
+        {
+            "id": 2,
+            "tipo": "MONTO_TOTAL",
+            "monto_limite": 100000,
+            "activo": 1,
+        },
+    ]
+    teclado = ui.construir_teclado_alertas(avisos)
+    datos = callbacks(teclado)
+    assert "del_aviso:1" in datos
+    assert "del_aviso:2" in datos
+    assert "del_aviso:cancelar" in datos
+
+    confirmacion = ui.construir_teclado_confirmar_eliminar_alerta(5)
+    assert callbacks(confirmacion) == [
+        "del_aviso_ok:5",
+        "del_aviso_no:5",
+    ]
+
+
 def test_dividir_texto():
     assert ui.dividir_texto("hola", limite=10) == ["hola"]
 

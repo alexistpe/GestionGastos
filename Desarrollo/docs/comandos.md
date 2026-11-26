@@ -99,7 +99,7 @@ Botones disponibles:
 - total ingresado, total gastado y neto;
 - gastos por etiqueta, de mayor a menor;
 - ingresos detallados;
-- cálculo de ahorro;
+- desglose de ahorro: saldo inicial, depositado, extraído, neto del período y saldo al cierre;
 - comparación con la rutina (gastado y pendiente);
 - gastos no esenciales por etiqueta, excluyendo la rutina y `ahorro`.
 
@@ -131,6 +131,36 @@ Botones disponibles:
 - La fecha inicial no puede ser posterior a la final.
 - Se aceptan también `DD/MM/AA` y `YYYY-MM-DD`.
 
+### 3.4 Reporte de ahorro
+
+**Sintaxis:** `ahorro`
+
+**Efecto:** muestra el reporte de ahorro del período actual:
+- saldo inicial;
+- depositado;
+- extraído;
+- neto del período;
+- saldo acumulado al cierre.
+
+**Cuándo usarlo:** para saber cuánto se depositó, cuánto se extrajo y cómo quedó el ahorro sin ejecutar el análisis completo.
+
+**Ejemplo:** `ahorro`
+
+### 3.5 Saldo inicial de ahorro
+
+**Sintaxis:** `ahorro inicial monto` o `ahorro inicial`
+
+**Efecto:**
+- `ahorro inicial monto` fija el saldo inicial de ahorro. No cuenta como depósito del período ni dispara alertas.
+- `ahorro inicial` muestra el saldo inicial configurado.
+
+**Cuándo usarlo:** al empezar a usar el bot con ahorros previos, o para corregir el saldo base.
+
+**Ejemplos:**
+- `ahorro inicial 100000`
+- `ahorro inicial 0`
+- `ahorro inicial`
+
 ---
 
 ## 4. Alertas
@@ -139,15 +169,26 @@ Botones disponibles:
 
 **Sintaxis:** `alerta etiqueta monto`
 
-**Efecto:** crea o actualiza un límite para esa etiqueta. Si el gasto del período la supera, el bot avisa una sola vez por período.
+**Efecto:** crea o actualiza un límite para esa etiqueta. Si el gasto del período la supera, el bot avisa una sola vez por período. Para la etiqueta `ahorro`, el límite se aplica a las **extracciones**, no a los depósitos.
 
 **Cuándo usarlo:** para controlar el gasto de una categoría específica.
 
 **Ejemplos:**
 - `alerta nafta 15000`
 - `alerta gym 20000`
+- `alerta ahorro 50000` (límite de extracciones de ahorro)
 
-### 4.2 Alerta de gasto total
+### 4.2 Alerta de extracciones de ahorro
+
+**Sintaxis:** `alerta ahorro monto`
+
+**Efecto:** crea o actualiza un límite para las extracciones de ahorro del período (`+ ahorro`). No limita los depósitos (`- ahorro`).
+
+**Cuándo usarlo:** para controlar cuánto dinero se retira de la cuenta de ahorro en el mes.
+
+**Ejemplo:** `alerta ahorro 50000`
+
+### 4.3 Alerta de gasto total
 
 **Sintaxis:** `alerta monto`
 
@@ -157,17 +198,33 @@ Botones disponibles:
 
 **Ejemplo:** `alerta 100000`
 
-### 4.3 Listar alertas
+### 4.4 Listar alertas
 
 **Sintaxis:** `alertas`
 
-**Efecto:** muestra las alertas activas con su tipo, etiqueta y monto límite.
+**Efecto:** muestra las alertas activas con su ID, tipo, etiqueta y monto límite.
 
 **Cuándo usarlo:** para revisar la configuración vigente.
+
+### 4.5 Eliminar alerta
+
+**Sintaxis:** `eliminar alerta` o `eliminar alerta ID`
+
+**Efecto:**
+- `eliminar alerta` muestra un selector con las alertas activas.
+- `eliminar alerta ID` pide confirmación para borrar esa alerta.
+- La eliminación es definitiva.
+
+**Cuándo usarlo:** para quitar una alerta que ya no se necesita.
+
+**Ejemplos:**
+- `eliminar alerta`
+- `eliminar alerta 3`
 
 **Notas:**
 - Las alertas se evalúan después de cada alta o modificación de comprobante.
 - Si el período cambia (nueva `cuota`), las alertas vuelven a habilitarse.
+- El balance de ahorro negativo del período se avisa con `AHORRO_NEGATIVO`.
 
 ---
 
@@ -282,9 +339,13 @@ Botones disponibles:
 | Análisis del mes | `analisis` |
 | Análisis desde una fecha | `analisis DD.MM.AA` |
 | Análisis por rango | `analisis DD.MM.AA DD.MM.AA` |
+| Reporte de ahorro | `ahorro` |
+| Saldo inicial de ahorro | `ahorro inicial monto` |
 | Alerta por etiqueta | `alerta etiqueta monto` |
+| Alerta de extracciones de ahorro | `alerta ahorro monto` |
 | Alerta de gasto total | `alerta monto` |
 | Listar alertas | `alertas` |
+| Eliminar alerta | `eliminar alerta` / `eliminar alerta ID` |
 | Crear etiqueta | `etiqueta nombre` |
 | Eliminar etiqueta | `eliminar etiqueta nombre` |
 | Listar etiquetas | `etiquetas` |
@@ -302,5 +363,8 @@ Botones disponibles:
 - Una etiqueta por comprobante.
 - Los montos son siempre positivos; el balance lo define `+`/`-` o la interpretación del comprobante.
 - El “mes actual” empieza en el último ingreso con etiqueta `cuota`.
-- `- ahorro` suma al ahorro; `+ ahorro` resta.
+- `- ahorro` deposita en ahorro; `+ ahorro` extrae de ahorro.
+- El saldo inicial se configura con `ahorro inicial monto` y no cuenta como depósito del período.
+- El ahorro del período es depositado - extraído; el acumulado suma el saldo inicial y todos los movimientos registrados.
+- `alerta ahorro monto` limita extracciones, no depósitos.
 - Si un comando no se entiende, el bot responde con la sintaxis esperada y un ejemplo.

@@ -25,7 +25,8 @@ El objetivo es tener un registro contable simple y consultable sin planillas man
 - Edición y borrado de comprobantes ya guardados.
 - Balances manuales por texto (`+ etiqueta monto` / `- etiqueta monto`).
 - Análisis por mes actual o por rango de fechas.
-- Gestión de etiquetas y de alertas.
+- Reporte de ahorro con saldo inicial, depositado, extraído, neto y acumulado.
+- Gestión de etiquetas y alertas, incluyendo eliminación de alertas.
 - Persistencia del estado de la conversación ante reinicios del proceso.
 - Acceso restringido a un único chat autorizado.
 
@@ -115,18 +116,25 @@ La etiqueta `ahorro` es especial:
 - `- ahorro` (egreso hacia la cuenta de ahorro) **suma** al total ahorrado.
 - `+ ahorro` (extracción desde los ahorros) **resta** al total ahorrado.
 
-Para el balance general sigue siendo un movimiento más; para la métrica “cuánto se ahorró” se invierte el signo, porque transferir dinero a ahorro no es un gasto que desaparezca.
+Se muestran dos balances:
+
+- **Neto del período:** depositado - extraído desde la última `cuota`.
+- **Acumulado histórico:** saldo inicial configurado + todos los movimientos de ahorro registrados.
+
+El saldo inicial se fija con `ahorro inicial monto` y no cuenta como depósito del período. El comando `ahorro` muestra el saldo inicial, depositado, extraído, neto y saldo al cierre. Para el balance general, los movimientos de ahorro siguen siendo ingresos/egresos normales.
 
 ### 5. Alertas y deduplicación
 
-Después de cada alta o modificación se evalúan cuatro situaciones:
+Después de cada alta o modificación se evalúan estas situaciones:
 
 1. balance neto del período negativo;
 2. rutina mensual completada;
 3. gasto de una etiqueta por encima de su límite;
-4. extracciones de ahorro superiores al ingreso neto del período.
+4. gasto total del período por encima del límite;
+5. extracciones de ahorro superiores al ingreso neto;
+6. **balance de ahorro del período negativo** (extraído > depositado).
 
-Cada alerta se emite una sola vez por período gracias a `avisos_disparados`. Al cambiar el período (nueva `cuota`) las alertas vuelven a habilitarse.
+La alerta `AHORRO_NEGATIVO` tiene prioridad sobre la alerta genérica `AHORRO` para no duplicar avisos de ahorro. `alerta ahorro monto` limita **extracciones** de ahorro. Cada alerta se emite una sola vez por período gracias a `avisos_disparados`; al cambiar el período (nueva `cuota`) se vuelven a habilitar. Las alertas se pueden borrar con `eliminar alerta` o `eliminar alerta ID`.
 
 ### 6. Estado conversacional
 
@@ -141,8 +149,9 @@ El bot mantiene el estado en memoria y lo respalda en `sesion_estado`. Al arranc
 
 ### 8. Análisis
 
-- **Rápido (`analisis`):** totales del período, comparación con la rutina (gastado y pendiente), gastos no esenciales por etiqueta y balance. Los gastos no esenciales excluyen la rutina y la etiqueta `ahorro`, que se informa por separado.
-- **Por rango (`analisis DD.MM.AA [DD.MM.AA]`):** total ingresado, total gastado, neto, gastos ordenados por etiqueta, ingresos detallados y cálculo de ahorro.
+- **Rápido (`analisis`):** totales del período, comparación con la rutina (gastado y pendiente), gastos no esenciales por etiqueta, balance y desglose de ahorro (saldo inicial, depositado, extraído, neto y saldo al cierre). Los gastos no esenciales excluyen la rutina y la etiqueta `ahorro`.
+- **Por rango (`analisis DD.MM.AA [DD.MM.AA]`):** total ingresado, total gastado, neto, gastos ordenados por etiqueta, ingresos detallados y el mismo desglose de ahorro, con saldo acumulado al cierre del rango.
+- **Ahorro (`ahorro`):** reporte rápido del período actual con el desglose de ahorro.
 
 ## Comandos
 
@@ -156,7 +165,11 @@ La guía completa, con efectos, casos de uso y ejemplos, está en [`Desarrollo/d
 | Análisis del mes | `analisis` |
 | Análisis por fecha | `analisis DD.MM.AA [DD.MM.AA]` |
 | Alerta por etiqueta | `alerta etiqueta monto` |
+| Alerta de extracciones de ahorro | `alerta ahorro monto` |
 | Alerta de gasto total | `alerta monto` |
+| Eliminar alerta | `eliminar alerta` o `eliminar alerta ID` |
+| Reporte de ahorro | `ahorro` |
+| Saldo inicial de ahorro | `ahorro inicial monto` |
 | Crear etiqueta | `etiqueta nombre` |
 | Eliminar etiqueta | `eliminar etiqueta nombre` |
 | Editar comprobante | `editar` o `editar ID` |
@@ -218,9 +231,10 @@ El desarrollo se organiza en **instancias** con puntos de control. La bitácora 
 | 3 | Extracción con Gemini | Aprobada (validación real con 2 comprobantes) |
 | 4 | Interfaz Telegram completa | Aprobada (arranque validado) |
 | 5 | Despliegue y operación | Aprobada (prueba real desde Telegram satisfactoria) |
-| 6 | Despliegue en dispositivo y transferencia | Pendiente de reinstalar y probar en el teléfono (REST/`httpx`) |
+| 6 | Despliegue en dispositivo y transferencia | Aprobada (bot instalado y funcionando en Android/Termux) |
+| 7 | Ahorro avanzado, saldo inicial y borrado de alertas | Pendiente de OK |
 
-El bot ya fue probado desde Telegram con el servidor en Linux. La suite actual tiene **127 pruebas mock + 2 de integración real**, y se validó en un venv limpio sin `google-genai`. Queda el despliegue físico en Termux, para el cual están los scripts, el paquete `dist/gastosBot-termux-*.tar.gz` y la guía [`Desarrollo/docs/despliegue.md`](Desarrollo/docs/despliegue.md) §14.
+El bot ya está instalado y funcionando en el dispositivo Android. La suite actual tiene **143 pruebas mock + 2 de integración real** con Gemini. La guía de actualización y respaldo está en [`Desarrollo/docs/despliegue.md`](Desarrollo/docs/despliegue.md).
 
 ## Documentación
 

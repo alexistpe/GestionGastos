@@ -24,6 +24,7 @@ warnings.filterwarnings(
 import config
 from database import db
 from handlers import (
+    ahorro_handler,
     alerta_handler,
     analisis_handler,
     balance_handler,
@@ -41,6 +42,7 @@ COMANDOS = [
     BotCommand("start", "Iniciar el bot"),
     BotCommand("ayuda", "Guía de comandos"),
     BotCommand("analisis", "Análisis del mes o por rango"),
+    BotCommand("ahorro", "Ver ahorro o fijar saldo inicial"),
     BotCommand("alerta", "Configurar una alerta"),
     BotCommand("alertas", "Ver alertas activas"),
     BotCommand("etiqueta", "Crear una etiqueta"),
@@ -183,6 +185,8 @@ def construir_aplicacion() -> Application:
     for handler in balance_handler.obtener_handlers():
         aplicacion.add_handler(handler, group=1)
     for handler in analisis_handler.obtener_handlers():
+        aplicacion.add_handler(handler, group=1)
+    for handler in ahorro_handler.obtener_handlers():
         aplicacion.add_handler(handler, group=1)
     for handler in alerta_handler.obtener_handlers():
         aplicacion.add_handler(handler, group=1)

@@ -395,6 +395,97 @@ def eliminar_aviso(id_aviso: int, db_path: str | Path | None = None) -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Configuración y saldo de ahorro
+# --------------------------------------------------------------------------- #
+
+CLAVE_SALDO_INICIAL_AHORRO = "saldo_inicial_ahorro"
+
+
+def obtener_configuracion(
+    clave: str, db_path: str | Path | None = None
+) -> str | None:
+    with conectar(db_path) as conn:
+        fila = conn.execute(
+            "SELECT valor FROM configuracion WHERE clave = ?", (clave,)
+        ).fetchone()
+        return str(fila["valor"]) if fila is not None else None
+
+
+def guardar_configuracion(
+    clave: str, valor: str, db_path: str | Path | None = None
+) -> None:
+    with conectar(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO configuracion (clave, valor) VALUES (?, ?)
+            ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor
+            """,
+            (clave, str(valor)),
+        )
+
+
+def obtener_saldo_inicial_ahorro(
+    db_path: str | Path | None = None,
+) -> float:
+    valor = obtener_configuracion(CLAVE_SALDO_INICIAL_AHORRO, db_path)
+    try:
+        return float(valor) if valor is not None else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def guardar_saldo_inicial_ahorro(
+    monto: float, db_path: str | Path | None = None
+) -> None:
+    guardar_configuracion(
+        CLAVE_SALDO_INICIAL_AHORRO, str(float(monto)), db_path
+    )
+
+
+def _saldo_ahorro(inclusive: bool, fecha, db_path=None) -> float:
+    fecha_iso = _a_fecha(fecha).isoformat()
+    operador = "<=" if inclusive else "<"
+    with conectar(db_path) as conn:
+        fila_config = conn.execute(
+            "SELECT valor FROM configuracion WHERE clave = ?",
+            (CLAVE_SALDO_INICIAL_AHORRO,),
+        ).fetchone()
+        try:
+            inicial = (
+                float(fila_config["valor"]) if fila_config is not None else 0.0
+            )
+        except (TypeError, ValueError):
+            inicial = 0.0
+
+        fila = conn.execute(
+            f"""
+            SELECT COALESCE(SUM(
+                CASE WHEN c.balance = 'EGRESO' THEN c.monto ELSE -c.monto END
+            ), 0) AS saldo
+            FROM comprobantes c
+            JOIN etiquetas e ON e.id = c.id_etiqueta
+            WHERE e.nombre = 'ahorro' AND c.fecha {operador} ?
+            """,
+            (fecha_iso,),
+        ).fetchone()
+        return inicial + float(fila["saldo"])
+
+
+def saldo_ahorro_antes(
+    fecha, db_path: str | Path | None = None
+) -> float:
+    """Saldo de ahorro al inicio de una fecha (sin incluir ese día)."""
+    return _saldo_ahorro(False, fecha, db_path)
+
+
+def saldo_ahorro_hasta(
+    fecha, db_path: str | Path | None = None
+) -> float:
+    """Saldo de ahorro al cierre de una fecha (incluyéndola)."""
+    return _saldo_ahorro(True, fecha, db_path)
+
+
+# --------------------------------------------------------------------------- #
 # Período actual
 # --------------------------------------------------------------------------- #
 

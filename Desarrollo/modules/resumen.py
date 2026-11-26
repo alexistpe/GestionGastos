@@ -40,6 +40,7 @@ class Resumen:
         tipo: TipoResumen | str = TipoResumen.MENSUAL,
         desde: date | datetime | str | None = None,
         hasta: date | datetime | str | None = None,
+        ahorro_inicial: float = 0.0,
     ) -> None:
         self.comprobantes = list(comprobantes)
         self.etiquetas_lista = list(etiquetas)
@@ -56,7 +57,13 @@ class Resumen:
         self.monto_ingresado = self.calcular_monto_ingresado()
         self.monto_saliente = self.calcular_monto_saliente()
         self.monto_neto = self.calcular_monto_neto()
-        self.monto_ahorro = self.calcular_ahorro()
+        self.ahorro_inicial = float(ahorro_inicial or 0.0)
+        (
+            self.ahorro_depositado,
+            self.ahorro_extraido,
+        ) = self.calcular_movimientos_ahorro()
+        self.monto_ahorro = self.ahorro_depositado - self.ahorro_extraido
+        self.ahorro_acumulado = self.ahorro_inicial + self.monto_ahorro
         self.gastos_por_etiqueta = self.calcular_gastos_por_etiqueta()
         self.ingresos = self.calcular_ingresos()
         self.rutina = self.calcular_rutina()
@@ -96,21 +103,25 @@ class Resumen:
     def calcular_monto_neto(self) -> float:
         return self.monto_ingresado - self.monto_saliente
 
-    def calcular_ahorro(self) -> float:
-        """Ahorro neto: egresos a ahorro menos extracciones desde ahorro."""
-        egresos = sum(
+    def calcular_movimientos_ahorro(self) -> tuple[float, float]:
+        """Devuelve (depositado, extraído) en el período."""
+        depositado = sum(
             float(comprobante["monto"])
             for comprobante in self.comprobantes
             if comprobante["balance"] == "EGRESO"
             and comprobante["etiqueta"] == "ahorro"
         )
-        ingresos = sum(
+        extraido = sum(
             float(comprobante["monto"])
             for comprobante in self.comprobantes
             if comprobante["balance"] == "INGRESO"
             and comprobante["etiqueta"] == "ahorro"
         )
-        return egresos - ingresos
+        return depositado, extraido
+
+    def calcular_ahorro(self) -> float:
+        """Ahorro neto del período: depositado menos extraído."""
+        return self.ahorro_depositado - self.ahorro_extraido
 
     def calcular_gastos_por_etiqueta(self) -> list[dict[str, Any]]:
         totales: dict[str, float] = {}
@@ -232,7 +243,11 @@ class Resumen:
             "monto_ingresado": self.monto_ingresado,
             "monto_saliente": self.monto_saliente,
             "monto_neto": self.monto_neto,
+            "ahorro_inicial": self.ahorro_inicial,
+            "ahorro_depositado": self.ahorro_depositado,
+            "ahorro_extraido": self.ahorro_extraido,
             "monto_ahorro": self.monto_ahorro,
+            "ahorro_acumulado": self.ahorro_acumulado,
             "gastos_por_etiqueta": self.gastos_por_etiqueta,
             "ingresos": self.ingresos,
             "comprobantes": self.comprobantes,
@@ -243,6 +258,32 @@ class Resumen:
             "gastos_no_esenciales": self.gastos_no_esenciales,
             "monto_gastos_no_esenciales": self.monto_gastos_no_esenciales,
         }
+
+    def a_texto_ahorro(self) -> str:
+        lineas = ["🐷 Ahorro"]
+        if self.desde and self.hasta:
+            lineas.append(
+                f"  Período: {formatear_fecha(self.desde)} → "
+                f"{formatear_fecha(self.hasta)}"
+            )
+        lineas.extend(
+            [
+                f"  Saldo inicial: {formatear_monto(self.ahorro_inicial)}",
+                f"  Depositado: {formatear_monto(self.ahorro_depositado)}",
+                f"  Extraído: {formatear_monto(self.ahorro_extraido)}",
+                f"  Neto del período: {formatear_monto(self.monto_ahorro)}",
+                f"  Saldo al cierre: {formatear_monto(self.ahorro_acumulado)}",
+            ]
+        )
+        if self.monto_ahorro < 0:
+            lineas.append(
+                "  ⚠️ El balance de ahorro del período es negativo."
+            )
+        if self.ahorro_acumulado < 0:
+            lineas.append(
+                "  ⚠️ El saldo acumulado de ahorro es negativo."
+            )
+        return "\n".join(lineas)
 
     def a_texto(self) -> str:
         titulo = (
@@ -287,9 +328,7 @@ class Resumen:
         else:
             lineas.append("  • Sin ingresos registrados.")
 
-        lineas.extend(
-            ["", f"🐷 Ahorro neto: {formatear_monto(self.monto_ahorro)}"]
-        )
+        lineas.extend(["", self.a_texto_ahorro()])
 
         if self.tipo is TipoResumen.MENSUAL:
             lineas.extend(["", "🏠 Rutina"])

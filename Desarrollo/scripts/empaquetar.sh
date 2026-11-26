@@ -18,8 +18,8 @@ ARCHIVO="$DESTINO/gastosBot-termux-$FECHA.tar.gz"
 tar -czf "$ARCHIVO" \
     -C "$REPO" \
     --exclude='Desarrollo/.env' \
-    --exclude='Desarrollo/.venv' \
-    --exclude='Desarrollo/venv' \
+    --exclude='Desarrollo/.venv*' \
+    --exclude='Desarrollo/venv*' \
     --exclude='Desarrollo/data' \
     --exclude='Desarrollo/logs' \
     --exclude='Desarrollo/bot.pid' \

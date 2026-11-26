@@ -41,6 +41,7 @@ def test_init_db_es_idempotente(db_path):
         "avisos",
         "sesion_estado",
         "avisos_disparados",
+        "configuracion",
     }.issubset(tablas)
 
 
@@ -319,6 +320,34 @@ def test_eliminar_etiqueta_elimina_sus_avisos(db_path):
 
     assert db.eliminar_etiqueta(gym_id, db_path) is True
     assert db.obtener_aviso(aviso_id, db_path) is None
+
+
+def test_configuracion_y_saldo_ahorro(db_path):
+    assert db.obtener_saldo_inicial_ahorro(db_path) == 0
+
+    db.guardar_saldo_inicial_ahorro(50000, db_path)
+    assert db.obtener_saldo_inicial_ahorro(db_path) == 50000
+    assert float(
+        db.obtener_configuracion("saldo_inicial_ahorro", db_path)
+    ) == 50000
+
+    ahorro_id = id_etiqueta(db_path, "ahorro")
+    db.crear_comprobante(
+        "2026-10-01", 100000, "EGRESO", ahorro_id, db_path=db_path
+    )
+    db.crear_comprobante(
+        "2026-10-15", 20000, "INGRESO", ahorro_id, db_path=db_path
+    )
+    db.crear_comprobante(
+        "2026-11-05", 30000, "EGRESO", ahorro_id, db_path=db_path
+    )
+    db.crear_comprobante(
+        "2026-11-10", 10000, "INGRESO", ahorro_id, db_path=db_path
+    )
+
+    assert db.saldo_ahorro_antes("2026-11-01", db_path) == 130000
+    assert db.saldo_ahorro_hasta("2026-11-05", db_path) == 160000
+    assert db.saldo_ahorro_hasta("2026-11-10", db_path) == 150000
 
 
 def test_avisos_disparados(db_path):

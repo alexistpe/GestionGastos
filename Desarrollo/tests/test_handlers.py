@@ -1,10 +1,11 @@
 from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, patch
 
-from telegram import Chat, Message, Update, User
+from telegram import CallbackQuery, Chat, Message, Update, User
 
 from database import db
 from handlers import (
+    ahorro_handler,
     alerta_handler,
     analisis_handler,
     balance_handler,
@@ -34,6 +35,28 @@ def crear_update(texto: str, chat_id: int = 123, user_id: int = 123) -> Update:
         text=texto,
     )
     return Update(update_id=1, message=mensaje)
+
+
+def crear_update_callback(
+    data: str, chat_id: int = 123, user_id: int = 123
+) -> Update:
+    usuario = User(id=user_id, first_name="Test", is_bot=False)
+    chat = Chat(id=chat_id, type="private")
+    mensaje = Message(
+        message_id=1,
+        date=datetime.now(timezone.utc),
+        chat=chat,
+        from_user=usuario,
+        text="mensaje",
+    )
+    callback = CallbackQuery(
+        id="cb-1",
+        from_user=usuario,
+        chat_instance="chat-instance",
+        message=mensaje,
+        data=data,
+    )
+    return Update(update_id=1, callback_query=callback)
 
 
 def textos_de_reply(reply) -> list[str]:
@@ -180,3 +203,91 @@ async def test_eliminar_etiqueta_sin_nombre_muestra_selector(db_path):
 
     assert reply.await_count == 1
     assert reply.await_args.kwargs.get("reply_markup") is not None
+
+
+async def test_ahorro_handler_saldo_inicial_y_reporte(db_path):
+    gestion = Gestion(db_path)
+    context = FakeContext(gestion)
+
+    with patch.object(
+        Message, "reply_text", new_callable=AsyncMock
+    ) as reply:
+        await ahorro_handler.manejar_ahorro(
+            crear_update("ahorro inicial 100000"), context
+        )
+
+    assert gestion.obtener_saldo_inicial_ahorro() == 100000
+    assert any("Saldo inicial" in texto for texto in textos_de_reply(reply))
+
+    with patch.object(
+        Message, "reply_text", new_callable=AsyncMock
+    ) as reply:
+        await ahorro_handler.manejar_ahorro(crear_update("ahorro"), context)
+
+    textos = textos_de_reply(reply)
+    assert any(
+        "Depositado" in texto and "Extraído" in texto for texto in textos
+    )
+
+    with patch.object(
+        Message, "reply_text", new_callable=AsyncMock
+    ) as reply:
+        await ahorro_handler.manejar_ahorro(
+            crear_update("ahorro inicial"), context
+        )
+
+    assert any(
+        "Saldo inicial de ahorro" in texto
+        for texto in textos_de_reply(reply)
+    )
+
+
+async def test_eliminar_alerta_selector_y_confirmacion(db_path):
+    gestion = Gestion(db_path)
+    aviso = gestion.configurar_alerta_total(100000)
+    context = FakeContext(gestion)
+
+    with patch.object(
+        Message, "reply_text", new_callable=AsyncMock
+    ) as reply:
+        await alerta_handler.eliminar_alerta(
+            crear_update("eliminar alerta"), context
+        )
+
+    markup = reply.await_args.kwargs.get("reply_markup")
+    assert markup is not None
+    callbacks = [
+        boton.callback_data
+        for fila in markup.inline_keyboard
+        for boton in fila
+    ]
+    assert f"del_aviso:{aviso['id']}" in callbacks
+    assert "del_aviso:cancelar" in callbacks
+
+    with patch.object(
+        Message, "reply_text", new_callable=AsyncMock
+    ) as reply:
+        await alerta_handler.eliminar_alerta(
+            crear_update(f"eliminar alerta {aviso['id']}"), context
+        )
+
+    assert reply.await_args.kwargs.get("reply_markup") is not None
+
+
+async def test_eliminar_alerta_callback_ok(db_path):
+    gestion = Gestion(db_path)
+    aviso = gestion.configurar_alerta_total(100000)
+    context = FakeContext(gestion)
+    update = crear_update_callback(f"del_aviso_ok:{aviso['id']}")
+
+    with patch.object(
+        CallbackQuery, "answer", new_callable=AsyncMock
+    ) as answer, patch.object(
+        CallbackQuery, "edit_message_text", new_callable=AsyncMock
+    ) as edit:
+        await alerta_handler.callback_eliminar_alerta(update, context)
+
+    assert gestion.conocer_aviso(aviso["id"]) is None
+    answer.assert_awaited()
+    edit.assert_awaited()
+    assert "eliminada" in edit.await_args.args[0]

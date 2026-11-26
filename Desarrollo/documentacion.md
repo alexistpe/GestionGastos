@@ -5,7 +5,7 @@
 - **Rama:** `main`
 - **Código:** `Desarrollo/`
 - **Inicio:** 2026-11-20
-- **Estado general:** Instancia 6 en curso; REST/httpx listo, pendiente de reinstalar y probar en el dispositivo (C6)
+- **Estado general:** Instancia 7 en curso; ahorro avanzado y borrado de alertas implementados, pendiente de aprobación (C7)
 
 Este documento es la bitácora general del proyecto. Registra cada cambio, decisión, conflicto y proceso relevante. Se organiza por **instancias** y cada instancia cierra con un **checkpoint** que requiere aprobación explícita antes de continuar.
 
@@ -33,7 +33,8 @@ Este documento es la bitácora general del proyecto. Registra cada cambio, decis
 | 3 | Extracción con Gemini | C3 | APROBADA |
 | 4 | Interfaz Telegram completa | C4 | APROBADA |
 | 5 | Despliegue y operación | C5 | APROBADA |
-| 6 | Despliegue en dispositivo y transferencia | C6 | PENDIENTE DE PRUEBA EN DISPOSITIVO |
+| 6 | Despliegue en dispositivo y transferencia | C6 | APROBADA |
+| 7 | Ahorro avanzado, saldo inicial y borrado de alertas | C7 | PENDIENTE DE OK |
 
 ---
 
@@ -101,6 +102,12 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | DEC-039 | Reemplazar `google-genai` por la API REST de Gemini con `httpx` | Evita `pydantic-core`, `google-auth` y `cryptography`, que no tienen wheels Android y rompen la instalación en Termux |
 | DEC-040 | `GEMINI_API_VERSION` configurable, por defecto `v1beta` | Permite ajustar la versión del endpoint sin tocar código |
 | DEC-041 | La API key de Gemini viaja en el header `x-goog-api-key` | Evita exponerla en la URL o en logs de `httpx` |
+| DEC-042 | El reporte de ahorro muestra saldo inicial, depositado, extraído, neto del período y saldo acumulado | Cubre la necesidad de ver movimientos y balance propio del ahorro |
+| DEC-043 | El saldo inicial de ahorro se guarda en `configuracion` y se fija con `ahorro inicial monto` | Permite reflejar ahorro previo sin contarlo como depósito del período |
+| DEC-044 | Agregar `AHORRO_NEGATIVO`; si se dispara, se omite `AHORRO` en ese período | Evita duplicar avisos de ahorro y prioriza el balance negativo |
+| DEC-045 | `alerta ahorro monto` limita extracciones y usa la clave `ETIQUETA_AHORRO:{id}` | El límite sobre depósitos no representaba el riesgo de extraer de más |
+| DEC-046 | Agregar `eliminar alerta` y `eliminar alerta ID` con confirmación inline | Permite deshacer o limpiar alertas sin tocar la base manualmente |
+| DEC-047 | El saldo acumulado negativo solo se advierte en el análisis, sin alerta aparte | Decisión del usuario para no sumar otra alerta |
 
 ---
 
@@ -128,6 +135,9 @@ Toda consulta se registra como `CONF-{n}` con las opciones planteadas y la decis
 | CONF-018 | 2026-11-20 | El `.env` original tiene una ruta absoluta de Termux que puede no coincidir con el nuevo clon | Bajo | La guía indica usar `DB_PATH=./data/gastos.db` o ajustar la ruta | Resuelto |
 | CONF-019 | 2026-11-20 | `pydantic-core` no tiene wheel para Android; pip intenta compilarlo con maturin/rustup y falla en Termux | Alto | Se reemplazó `google-genai` por REST/`httpx`; desaparecen pydantic, google-auth y cryptography (DEC-039) | Resuelto |
 | CONF-020 | 2026-11-20 | `cryptography` tampoco tenía wheel Android y se resolvió con `python-cryptography` del sistema | Medio | Con REST/`httpx` ya no se necesita; la instalación queda en Python puro | Resuelto |
+| CONF-021 | 2026-11-21 | `alerta ahorro monto` limitaba depósitos, no extracciones, y no cubría el balance de ahorro negativo | Medio | Se cambia a límite de extracciones y se agrega `AHORRO_NEGATIVO` (DEC-044, DEC-045) | Resuelto |
+| CONF-022 | 2026-11-21 | El saldo acumulado necesitaba un punto de partida y no existía una tabla de configuración | Bajo | Se agrega `configuracion` y `ahorro inicial monto`; `init_db` crea la tabla al reiniciar (DEC-043) | Resuelto |
+| CONF-023 | 2026-11-21 | Al cambiar la semántica de `alerta ahorro`, la deduplicación vieja podía suprimir la nueva alerta | Bajo | Se usa la clave `ETIQUETA_AHORRO:{id}` para las alertas de extracciones | Resuelto |
 
 ---
 
@@ -553,7 +563,7 @@ Preparar el traslado del proyecto a Termux, responder dudas de portabilidad entr
 | I6-008 | 2026-11-20 20:25 | agregado | Cliente REST con `httpx`, esquema JSON, base64, manejo de errores y reintentos | `modules/traductor.py` | `pytest tests/test_traductor.py` | 19 pruebas |
 | I6-009 | 2026-11-20 20:35 | cambio | Tests adaptados a `httpx.MockTransport` y dependencias actualizadas | `tests/test_traductor.py`, `requirements.txt`, `.env.example` | `pytest -q` | 127 aprobadas, 2 omitidas |
 | I6-010 | 2026-11-20 20:45 | verificación | Validación real con 2 comprobantes y venv limpio sin `google-genai` | `tests/test_traductor_integracion.py` | API real + venv limpio | 2 reales OK; 127 mock OK |
-| I6-011 | — | pendiente | Reinstalar en Termux con las nuevas dependencias y probar en el dispositivo | — | Checklist de `docs/despliegue.md` §14 | Pendiente |
+| I6-011 | 2026-11-21 | verificación | Instalación en Termux con REST/`httpx` y prueba en el dispositivo | — | Confirmación del usuario | OK: software compilado y funcionando en Android |
 
 ## Verificación ejecutada
 
@@ -612,7 +622,74 @@ bash -n OK
 - **Construido:** guía de transferencia, paquete seguro, checklist de instalación y migración a REST/`httpx`.
 - **Verificación:** 127 pruebas mock + 2 reales; venv limpio sin `google-genai`; paquete sin secretos ni datos; scripts validados.
 - **Pendientes:** reinstalar en el dispositivo con el nuevo `requirements.txt`, transferir `.env`, migrar o crear la base, probar `/start` y un comprobante, configurar cron.
-- **Estado:** PENDIENTE DE PRUEBA EN DISPOSITIVO. El usuario debe ejecutar el despliegue con las nuevas dependencias y reportar el resultado.
+- **Estado:** APROBADA. El software quedó instalado y funcionando en el dispositivo Android.
+
+---
+
+# Instancia 7 — Ahorro avanzado, saldo inicial y borrado de alertas
+
+## Objetivo y alcance
+
+Mostrar el desglose de ahorro del período y el saldo acumulado, permitir fijar un saldo inicial, alertar cuando el ahorro del período sea negativo, cambiar el límite de ahorro para que aplique a extracciones y agregar eliminación de alertas.
+
+## Bitácora
+
+| ID | Fecha/hora | Tipo | Descripción | Archivos | Verificación | Resultado |
+|---|---|---|---|---|---|---|
+| I7-001 | 2026-11-21 18:00 | agregado | Tabla `configuracion`, saldo inicial y cálculo de saldo de ahorro antes/hasta | `database/schema.sql`, `database/seed.sql`, `database/db.py` | `pytest tests/test_db.py` | OK |
+| I7-002 | 2026-11-21 18:10 | agregado | Desglose de ahorro del período y saldo acumulado en `Resumen` | `modules/resumen.py` | `pytest tests/test_resumen.py` | OK |
+| I7-003 | 2026-11-21 18:20 | agregado | Saldo inicial y eliminación de alertas en `Gestion` | `modules/gestion.py` | `pytest tests/test_gestion.py` | OK |
+| I7-004 | 2026-11-21 18:30 | cambio | `AHORRO_NEGATIVO`, supresión de `AHORRO` y límite de extracciones | `modules/aviso.py` | `pytest tests/test_aviso.py` | OK |
+| I7-005 | 2026-11-21 18:40 | agregado | Comandos `ahorro`, `ahorro inicial` y `eliminar alerta` | `handlers/ahorro_handler.py`, `handlers/alerta_handler.py`, `utils/parsers.py`, `utils/telegram.py`, `main.py` | `pytest tests/test_handlers.py tests/test_parsers.py tests/test_ui.py` | OK |
+| I7-006 | 2026-11-21 18:50 | verificación | Suite completa y compilación | `tests/` | `pytest -q` y `compileall` | 143 aprobadas, 2 omitidas |
+| I7-007 | 2026-11-21 19:00 | cambio | Documentación de ahorro, alertas y comandos | `README.md`, `docs/` | Revisión | OK |
+
+## Verificación ejecutada
+
+```text
+$ .venv/bin/python -m pytest -q
+143 passed, 2 skipped in 4.90s
+
+$ .venv/bin/python -m compileall -q . -x '/\.venv/'
+compileall OK
+```
+
+Cobertura funcional verificada:
+
+- Saldo inicial de ahorro y cálculo de saldo antes/hasta una fecha.
+- Neto del período y saldo acumulado en análisis mensual y por rango.
+- Advertencia de ahorro del período negativo y de acumulado negativo.
+- `AHORRO_NEGATIVO` con deduplicación por período.
+- Supresión de la alerta genérica `AHORRO` cuando el ahorro del período es negativo.
+- `alerta ahorro monto` limitando extracciones y no depósitos.
+- Comandos `ahorro`, `ahorro inicial` y `eliminar alerta`.
+- Formato de alertas con ID y marca de extracciones de ahorro.
+
+## Decisiones y observaciones
+
+- El saldo inicial se guarda en `configuracion` y solo afecta el acumulado histórico; no cuenta como depósito del período ni dispara alertas.
+- El saldo acumulado refleja el saldo inicial más los movimientos registrados en el bot; no es el saldo real del banco si hay movimientos previos no cargados.
+- El acumulado negativo se muestra con advertencia en el análisis, sin alerta separada.
+- `alerta ahorro monto` cambia de semántica: ahora limita extracciones. Las alertas existentes se reinterpretan y usan la clave `ETIQUETA_AHORRO:{id}`.
+- El borrado de alertas es definitivo y pide confirmación.
+- **Persistencia:** la actualización no borra comprobantes, etiquetas ni alertas. `init_db` agrega la tabla `configuracion` sobre la base existente al reiniciar; el historial se mantiene.
+
+## Archivos entregados
+
+- `database/schema.sql`, `database/seed.sql`, `database/db.py`.
+- `modules/resumen.py`, `modules/gestion.py`, `modules/aviso.py`.
+- `handlers/ahorro_handler.py`, `handlers/alerta_handler.py`.
+- `utils/parsers.py`, `utils/telegram.py`, `main.py`.
+- Tests y documentación actualizados.
+
+## Mini informe de checkpoint C7
+
+- **Objetivo:** cubrir el ahorro como etiqueta especial y permitir administrar alertas creadas.
+- **Construido:** desglose de ahorro, saldo inicial, saldo acumulado, `AHORRO_NEGATIVO`, límite de extracciones y borrado de alertas.
+- **Verificación:** 143 pruebas aprobadas, 2 omitidas; `compileall` OK.
+- **Conflictos:** CONF-021, CONF-022 y CONF-023 resueltos.
+- **Pendientes:** actualizar el bot en el dispositivo y probar `ahorro`, `ahorro inicial`, `alerta ahorro` y `eliminar alerta`.
+- **Estado:** PENDIENTE DE APROBACIÓN.
 
 ---
 
@@ -626,4 +703,5 @@ bash -n OK
 | C3 | 3 | 2026-11-20 | APROBADA | Aprobación implícita al indicar “Continua”; 96 pruebas con validación real |
 | C4 | 4 | 2026-11-20 | APROBADA | Aprobación implícita al pedir continuar; token aceptado en entorno personal |
 | C5 | 5 | 2026-11-20 | APROBADA | Prueba real desde Telegram satisfactoria; scripts y guía listos |
-| C6 | 6 | 2026-11-20 | PENDIENTE DE PRUEBA EN DISPOSITIVO | REST/httpx validado en Linux y venv limpio; falta reinstalar y probar en el teléfono |
+| C6 | 6 | 2026-11-21 | APROBADA | REST/httpx instalado y funcionando en Android/Termux |
+| C7 | 7 | 2026-11-21 | PENDIENTE DE OK | 143 pruebas aprobadas; ahorro avanzado y borrado de alertas |

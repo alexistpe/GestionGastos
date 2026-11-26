@@ -132,7 +132,7 @@ def test_alerta_rutina_completa(db_path):
     assert evaluar_avisos(rango, db_path) == []
 
 
-def test_alerta_ahorro(db_path):
+def test_alerta_ahorro_negativo(db_path):
     comprobantes = [
         comp(1, "ahorro", 200000, "INGRESO"),
         comp(2, "nafta", 50000, "EGRESO"),
@@ -140,9 +140,91 @@ def test_alerta_ahorro(db_path):
 
     alertas = evaluar_avisos(resumen(comprobantes), db_path)
 
-    assert [alerta["clave"] for alerta in alertas] == ["AHORRO"]
+    assert [alerta["clave"] for alerta in alertas] == ["AHORRO_NEGATIVO"]
+    assert "$0,00" in alertas[0]["mensaje"]
     assert "$200.000,00" in alertas[0]["mensaje"]
-    assert "$150.000,00" in alertas[0]["mensaje"]
+    assert "-$200.000,00" in alertas[0]["mensaje"]
+
+
+def test_alerta_ahorro_negativo_deduplicada_y_nuevo_periodo(db_path):
+    comprobantes = [
+        comp(1, "ahorro", 200000, "INGRESO"),
+        comp(2, "nafta", 50000, "EGRESO"),
+    ]
+
+    primero = resumen(comprobantes)
+    assert [a["clave"] for a in evaluar_avisos(primero, db_path)] == [
+        "AHORRO_NEGATIVO"
+    ]
+    assert evaluar_avisos(primero, db_path) == []
+
+    segundo = resumen(
+        comprobantes,
+        desde=date(2026, 12, 3),
+        hasta=date(2026, 12, 20),
+    )
+    assert [a["clave"] for a in evaluar_avisos(segundo, db_path)] == [
+        "AHORRO_NEGATIVO"
+    ]
+
+
+def test_alerta_ahorro_generica_si_neto_positivo(db_path):
+    comprobantes = [
+        comp(1, "cuota", 1000000, "INGRESO"),
+        comp(2, "ahorro", 500000, "EGRESO"),
+        comp(3, "ahorro", 300000, "INGRESO"),
+        comp(4, "nafta", 550000, "EGRESO"),
+    ]
+
+    alertas = evaluar_avisos(resumen(comprobantes), db_path)
+
+    assert [alerta["clave"] for alerta in alertas] == ["AHORRO"]
+    assert "$300.000,00" in alertas[0]["mensaje"]
+    assert "$250.000,00" in alertas[0]["mensaje"]
+
+
+def test_limite_extracciones_ahorro(db_path):
+    comprobantes = [
+        comp(1, "cuota", 500000, "INGRESO"),
+        comp(2, "ahorro", 100000, "EGRESO"),
+        comp(3, "ahorro", 60000, "INGRESO"),
+    ]
+    avisos = [
+        {
+            "id": 20,
+            "tipo": "ETIQUETA",
+            "id_etiqueta": 7,
+            "etiqueta": "ahorro",
+            "monto_limite": 50000,
+            "activo": 1,
+        }
+    ]
+
+    alertas = evaluar_avisos(resumen(comprobantes, avisos), db_path)
+
+    assert [alerta["clave"] for alerta in alertas] == ["ETIQUETA_AHORRO:20"]
+    assert "Extracciones de ahorro" in alertas[0]["mensaje"]
+    assert "$60.000,00" in alertas[0]["mensaje"]
+    assert "$50.000,00" in alertas[0]["mensaje"]
+
+
+def test_limite_ahorro_no_alerta_por_depositos(db_path):
+    comprobantes = [
+        comp(1, "cuota", 500000, "INGRESO"),
+        comp(2, "ahorro", 100000, "EGRESO"),
+    ]
+    avisos = [
+        {
+            "id": 21,
+            "tipo": "ETIQUETA",
+            "id_etiqueta": 7,
+            "etiqueta": "ahorro",
+            "monto_limite": 50000,
+            "activo": 1,
+        }
+    ]
+
+    assert evaluar_avisos(resumen(comprobantes, avisos), db_path) == []
 
 
 def test_sin_extracciones_de_ahorro_no_alerta(db_path):

@@ -202,3 +202,32 @@ def test_conocer_etiqueta(db_path):
     assert gestion.conocer_etiqueta("noexiste") is None
     with pytest.raises(ErrorGestion):
         gestion.conocer_etiqueta("!!!")
+
+
+def test_configurar_saldo_inicial_ahorro(db_path):
+    gestion = Gestion(db_path)
+
+    assert gestion.obtener_saldo_inicial_ahorro() == 0
+    assert gestion.configurar_saldo_inicial_ahorro("100.000") == 100000
+    assert gestion.obtener_saldo_inicial_ahorro() == 100000
+    assert gestion.configurar_saldo_inicial_ahorro(0) == 0
+    assert gestion.obtener_saldo_inicial_ahorro() == 0
+
+    with pytest.raises(ErrorGestion):
+        gestion.configurar_saldo_inicial_ahorro(-1)
+    with pytest.raises(ErrorGestion):
+        gestion.configurar_saldo_inicial_ahorro("abc")
+
+
+def test_eliminar_alerta(db_path):
+    gestion = Gestion(db_path)
+    aviso = gestion.configurar_alerta_total(100000)
+
+    eliminado = gestion.eliminar_alerta(aviso["id"])
+
+    assert eliminado["id"] == aviso["id"]
+    assert gestion.conocer_aviso(aviso["id"]) is None
+    assert gestion.listar_alertas() == []
+
+    with pytest.raises(ErrorGestion):
+        gestion.eliminar_alerta(aviso["id"])

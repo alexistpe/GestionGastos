@@ -34,10 +34,11 @@ Documento técnico de referencia. Complementa el SPEC original y registra las de
 
 ### 3.1 Tablas base
 
-El schema parte de las tablas del SPEC y agrega dos elementos justificados:
+El schema parte de las tablas del SPEC y agrega tres elementos justificados:
 
 1. `avisos_disparados`, para emitir cada alerta una sola vez por período.
 2. `sesion_estado.nombre_conversacion`, para la persistencia de PTB.
+3. `configuracion`, para el saldo inicial de ahorro y futuras preferencias.
 
 Tablas:
 
@@ -46,6 +47,7 @@ Tablas:
 - **`avisos`**: `tipo` (`ETIQUETA`/`MONTO_TOTAL`), `id_etiqueta`, `monto_limite > 0`, `activo`.
 - **`sesion_estado`**: `chat_id` (PK), `nombre_conversacion`, `estado_actual`, `contexto_json`, `id_comprobante`, `timestamp`.
 - **`avisos_disparados`**: `clave`, `periodo`, `disparado_en`, PK compuesta.
+- **`configuracion`**: `clave` (PK), `valor`; guarda `saldo_inicial_ahorro`.
 
 ### 3.2 Integridad
 
@@ -185,9 +187,14 @@ Los botones de la confirmación modifican el contexto en memoria. El registro no
 
 ### 7.2 Ahorro
 
-- `- ahorro` suma al total ahorrado.
-- `+ ahorro` resta al total ahorrado.
+- `- ahorro` es un depósito: suma al ahorro.
+- `+ ahorro` es una extracción: resta al ahorro.
 - Para el balance general, el signo contable se mantiene.
+- **Período:** `ahorro_depositado`, `ahorro_extraido` y `monto_ahorro = depositado - extraído`.
+- **Acumulado:** `ahorro_inicial` (saldo configurado + movimientos anteriores al período) + `monto_ahorro`.
+- El saldo inicial se guarda en `configuracion.saldo_inicial_ahorro` y se fija con `ahorro inicial monto`.
+- El saldo acumulado solo refleja movimientos registrados en el bot más el saldo inicial configurado.
+- La alerta `AHORRO_NEGATIVO` usa el neto del período; el saldo acumulado negativo solo se advierte en el análisis.
 
 ### 7.3 Alertas
 
@@ -197,17 +204,24 @@ Se evalúan después de cada alta o modificación:
 2. rutina completada;
 3. etiqueta por encima de su límite;
 4. gasto total del período por encima del límite configurado;
-5. extracciones de ahorro mayores al ingreso neto.
+5. extracciones de ahorro mayores al ingreso neto;
+6. balance de ahorro del período negativo (extraído > depositado).
+
+Para no duplicar avisos de ahorro, si se dispara `AHORRO_NEGATIVO` se omite `AHORRO` en ese período.
 
 La tabla `avisos_disparados` evita repetir una alerta en el mismo período. Claves:
 
 - `ETIQUETA:{id}`
+- `ETIQUETA_AHORRO:{id}` (límite de extracciones de ahorro)
 - `MONTO_TOTAL`
 - `BALANCE_NEGATIVO`
 - `RUTINA`
 - `AHORRO`
+- `AHORRO_NEGATIVO`
 
 El período se identifica por la fecha de inicio del período actual.
+
+Las alertas se pueden eliminar con `eliminar alerta` (selector) o `eliminar alerta ID`.
 
 ### 7.4 Rutina
 

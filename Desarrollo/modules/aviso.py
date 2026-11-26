@@ -39,11 +39,23 @@ class Aviso:
 
     def clave(self) -> str:
         if self.tipo == "ETIQUETA":
+            if self.etiqueta == "ahorro":
+                return f"ETIQUETA_AHORRO:{self.id}"
             return f"ETIQUETA:{self.id}"
         return "MONTO_TOTAL"
 
     def evaluar(self, resumen: Resumen) -> str | None:
         if self.tipo == "ETIQUETA":
+            if self.etiqueta == "ahorro":
+                extraido = resumen.ahorro_extraido
+                if extraido > self.monto_limite:
+                    return (
+                        "⚠️ Extracciones de ahorro superaron el límite: "
+                        f"{formatear_monto(extraido)} de "
+                        f"{formatear_monto(self.monto_limite)}."
+                    )
+                return None
+
             gasto = next(
                 (
                     item["monto"]
@@ -139,18 +151,31 @@ def evaluar_avisos(
         if alerta:
             disparados.append(alerta)
 
-    extracciones = sum(
-        float(comprobante["monto"])
-        for comprobante in resumen.comprobantes
-        if comprobante["balance"] == "INGRESO"
-        and comprobante["etiqueta"] == "ahorro"
-    )
-    if extracciones > 0 and extracciones > resumen.monto_neto:
+    if resumen.monto_ahorro < 0:
+        alerta = _registrar(
+            "AHORRO_NEGATIVO",
+            "ahorro",
+            (
+                "⚠️ Balance de ahorro negativo en el período: "
+                f"depositado {formatear_monto(resumen.ahorro_depositado)}, "
+                f"extraído {formatear_monto(resumen.ahorro_extraido)}, "
+                f"neto {formatear_monto(resumen.monto_ahorro)}."
+            ),
+            periodo,
+            db_path,
+        )
+        if alerta:
+            disparados.append(alerta)
+    elif (
+        resumen.ahorro_extraido > 0
+        and resumen.ahorro_extraido > resumen.monto_neto
+    ):
         alerta = _registrar(
             "AHORRO",
             "ahorro",
             (
-                f"⚠️ Extracciones de ahorro ({formatear_monto(extracciones)}) "
+                "⚠️ Extracciones de ahorro "
+                f"({formatear_monto(resumen.ahorro_extraido)}) "
                 "superan el ingreso neto del período "
                 f"({formatear_monto(resumen.monto_neto)})."
             ),

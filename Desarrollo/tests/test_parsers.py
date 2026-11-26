@@ -153,6 +153,45 @@ def test_parsear_alerta():
         parsers.parsear_comando("alerta nafta")
 
 
+def test_parsear_ahorro():
+    assert parsers.parsear_comando("ahorro") == {"tipo": "reporte_ahorro"}
+    assert parsers.parsear_comando("ahorro inicial") == {
+        "tipo": "ahorro_inicial",
+        "monto": None,
+    }
+    assert parsers.parsear_comando("ahorro inicial 100000") == {
+        "tipo": "ahorro_inicial",
+        "monto": 100000.0,
+    }
+    assert parsers.parsear_comando("ahorro inicial 0") == {
+        "tipo": "ahorro_inicial",
+        "monto": 0.0,
+    }
+    assert parsers.parsear_comando("ahorro inicial $10.000") == {
+        "tipo": "ahorro_inicial",
+        "monto": 10000.0,
+    }
+
+    with pytest.raises(ErrorParseo):
+        parsers.parsear_comando("ahorro inicial -5")
+    with pytest.raises(ErrorParseo):
+        parsers.parsear_comando("ahorro inicial abc")
+
+
+def test_parsear_eliminar_alerta():
+    assert parsers.parsear_comando("eliminar alerta") == {
+        "tipo": "eliminar_alerta",
+        "id": None,
+    }
+    assert parsers.parsear_comando("eliminar alerta 7") == {
+        "tipo": "eliminar_alerta",
+        "id": 7,
+    }
+
+    with pytest.raises(ErrorParseo):
+        parsers.parsear_comando("eliminar alerta abc")
+
+
 def test_parsear_etiquetas():
     assert parsers.parsear_comando("etiqueta supermercado") == {
         "tipo": "crear_etiqueta",

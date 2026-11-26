@@ -291,6 +291,7 @@ class Gestion:
         )
         etiquetas = db.listar_etiquetas(self.db_path)
         avisos = db.listar_avisos(solo_activos=True, db_path=self.db_path)
+        ahorro_inicial = db.saldo_ahorro_antes(inicio, self.db_path)
         return Resumen(
             comprobantes=comprobantes,
             etiquetas=etiquetas,
@@ -298,6 +299,7 @@ class Gestion:
             tipo=tipo_enum,
             desde=inicio,
             hasta=fin,
+            ahorro_inicial=ahorro_inicial,
         )
 
     def conocer_resumen(
@@ -347,6 +349,44 @@ class Gestion:
 
     def conocer_aviso(self, id_aviso: int) -> dict[str, Any] | None:
         return db.obtener_aviso(id_aviso, self.db_path)
+
+    def eliminar_alerta(self, id_aviso: int) -> dict[str, Any]:
+        aviso = db.obtener_aviso(id_aviso, self.db_path)
+        if aviso is None:
+            raise ErrorGestion(f"No existe la alerta #{id_aviso}.")
+        db.eliminar_aviso(id_aviso, self.db_path)
+        return aviso
+
+    # ------------------------------------------------------------------ #
+    # Ahorro
+    # ------------------------------------------------------------------ #
+
+    def _normalizar_saldo_inicial(self, monto: Any) -> float:
+        if isinstance(monto, (int, float)) and not isinstance(monto, bool):
+            valor = float(monto)
+        else:
+            texto = str(monto).strip()
+            if texto in {"0", "0,0", "0.0", "0,00", "0.00"}:
+                valor = 0.0
+            else:
+                try:
+                    valor = parsers.parsear_monto(texto)
+                except ErrorParseo as exc:
+                    raise ErrorGestion(str(exc)) from exc
+        if valor < 0:
+            raise ErrorGestion("El saldo inicial no puede ser negativo.")
+        return valor
+
+    def configurar_saldo_inicial_ahorro(self, monto: Any) -> float:
+        valor = self._normalizar_saldo_inicial(monto)
+        db.guardar_saldo_inicial_ahorro(valor, self.db_path)
+        return valor
+
+    def obtener_saldo_inicial_ahorro(self) -> float:
+        return db.obtener_saldo_inicial_ahorro(self.db_path)
+
+    def generar_resumen_ahorro(self, hoy: Any = None) -> Resumen:
+        return self.generar_resumen("MENSUAL", hoy=hoy)
 
     # ------------------------------------------------------------------ #
     # Etiquetas

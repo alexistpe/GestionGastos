@@ -234,6 +234,21 @@ git pull origin main
 
 Antes de actualizar, conviene ejecutar `scripts/backup.sh` y conservar la copia local de la base.
 
+Si usás el tarball en lugar de Git:
+
+```bash
+cd ~/gastos
+tar -xzf ~/storage/downloads/gastosBot-termux-NUEVO.tar.gz -C ~/gastos
+cd ~/gastos/Desarrollo
+rm -rf .venv
+bash scripts/install_termux.sh
+./scripts/start.sh
+```
+
+La base `data/gastos.db` y el `.env` no están dentro del tarball, así que se conservan.
+
+**Persistencia:** al arrancar, `init_db` agrega la tabla `configuracion` si no existe. No se borran comprobantes, etiquetas, alertas ni historial. El saldo inicial de ahorro se configura después con `ahorro inicial monto`.
+
 ---
 
 ## 11. Seguridad

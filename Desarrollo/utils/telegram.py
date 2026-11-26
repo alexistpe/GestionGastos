@@ -33,8 +33,16 @@ TEXTO_AYUDA = """📖 Guía rápida de GestionGastos
 
 🚨 ALERTAS
 • alerta etiqueta monto → Ej: alerta nafta 15000
+• alerta ahorro monto → límite de extracciones de ahorro
 • alerta monto → Ej: alerta 100000
 • alertas → ver alertas activas
+• eliminar alerta → elegir una alerta para borrar
+• eliminar alerta ID → borrar la alerta indicada
+
+🐷 AHORRO
+• ahorro → saldo inicial, depositado, extraído, neto y acumulado
+• ahorro inicial monto → fijar el saldo inicial de ahorro
+• ahorro inicial → ver el saldo inicial configurado
 
 🏷️ ETIQUETAS
 • etiqueta nombre → crear
@@ -205,6 +213,42 @@ def construir_teclado_seleccion(
     return InlineKeyboardMarkup(filas)
 
 
+def construir_teclado_alertas(
+    avisos: list[dict[str, Any]],
+) -> InlineKeyboardMarkup:
+    filas: list[list[InlineKeyboardButton]] = []
+    for aviso in avisos:
+        filas.append(
+            [
+                InlineKeyboardButton(
+                    formatear_alerta(aviso, incluir_id=True),
+                    callback_data=f"del_aviso:{aviso['id']}",
+                )
+            ]
+        )
+    filas.append(
+        [InlineKeyboardButton("❌ Cancelar", callback_data="del_aviso:cancelar")]
+    )
+    return InlineKeyboardMarkup(filas)
+
+
+def construir_teclado_confirmar_eliminar_alerta(
+    id_aviso: int,
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "🗑️ Sí, eliminar", callback_data=f"del_aviso_ok:{id_aviso}"
+                ),
+                InlineKeyboardButton(
+                    "❌ Cancelar", callback_data=f"del_aviso_no:{id_aviso}"
+                ),
+            ]
+        ]
+    )
+
+
 def construir_teclado_confirmar_eliminar(
     id_etiqueta: int,
 ) -> InlineKeyboardMarkup:
@@ -274,17 +318,30 @@ def formatear_comprobante(comprobante: dict[str, Any]) -> str:
     return texto
 
 
-def formatear_alerta(aviso: dict[str, Any]) -> str:
+def formatear_alerta(
+    aviso: dict[str, Any], incluir_id: bool = False
+) -> str:
+    prefijo = (
+        f"#{aviso['id']} · "
+        if incluir_id and aviso.get("id") is not None
+        else ""
+    )
     if aviso["tipo"] == "ETIQUETA":
-        texto = (
-            f"🏷️ {aviso.get('etiqueta')}: "
-            f"{formatear_monto(aviso['monto_limite'])}"
-        )
+        if aviso.get("etiqueta") == "ahorro":
+            texto = (
+                "🏷️ ahorro (máx. extracciones): "
+                f"{formatear_monto(aviso['monto_limite'])}"
+            )
+        else:
+            texto = (
+                f"🏷️ {aviso.get('etiqueta')}: "
+                f"{formatear_monto(aviso['monto_limite'])}"
+            )
     else:
         texto = f"💸 Gasto total: {formatear_monto(aviso['monto_limite'])}"
     if not aviso.get("activo", 1):
         texto += " (inactiva)"
-    return texto
+    return prefijo + texto
 
 
 def dividir_texto(texto: str, limite: int = 4000) -> list[str]:

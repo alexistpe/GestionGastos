@@ -209,6 +209,53 @@ def parsear_alerta(texto: str) -> dict | None:
     )
 
 
+def _parsear_monto_inicial(texto: str) -> float:
+    if texto.strip() in {"0", "0,0", "0.0", "0,00", "0.00"}:
+        return 0.0
+    return parsear_monto(texto)
+
+
+def parsear_ahorro(texto: str) -> dict | None:
+    normalizado = normalizar_texto(_quitar_barra(texto))
+    if normalizado == "ahorro":
+        return {"tipo": "reporte_ahorro"}
+
+    coincidencia = re.fullmatch(
+        r"ahorro\s+inicial(?:\s+(.+))?", normalizado
+    )
+    if not coincidencia:
+        return None
+
+    resto = coincidencia.group(1)
+    if not resto:
+        return {"tipo": "ahorro_inicial", "monto": None}
+    return {
+        "tipo": "ahorro_inicial",
+        "monto": _parsear_monto_inicial(resto),
+    }
+
+
+def parsear_eliminar_alerta(texto: str) -> dict | None:
+    normalizado = normalizar_texto(_quitar_barra(texto))
+    if normalizado == "eliminar alerta":
+        return {"tipo": "eliminar_alerta", "id": None}
+
+    coincidencia = re.fullmatch(
+        r"eliminar\s+alerta\s+#?(\d+)", normalizado
+    )
+    if coincidencia:
+        return {
+            "tipo": "eliminar_alerta",
+            "id": int(coincidencia.group(1)),
+        }
+
+    if normalizado.startswith("eliminar alerta "):
+        raise ErrorParseo(
+            "ID inválido. Usá: eliminar alerta [ID]."
+        )
+    return None
+
+
 def parsear_etiqueta(texto: str) -> dict | None:
     normalizado = normalizar_texto(_quitar_barra(texto))
     if normalizado == "etiquetas":
@@ -267,7 +314,9 @@ def parsear_comando(texto: str) -> dict | None:
 
     for parser in (
         parsear_analisis,
+        parsear_ahorro,
         parsear_alerta,
+        parsear_eliminar_alerta,
         parsear_etiqueta,
         parsear_eliminar_etiqueta,
     ):

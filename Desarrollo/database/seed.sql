@@ -9,3 +9,6 @@ INSERT OR IGNORE INTO etiquetas (nombre, es_rutina) VALUES
     ('claro',      1),
     ('cuota',      0),
     ('ahorro',     0);
+
+INSERT OR IGNORE INTO configuracion (clave, valor) VALUES
+    ('saldo_inicial_ahorro', '0');
